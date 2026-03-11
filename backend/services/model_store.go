@@ -136,33 +136,81 @@ func (s *ModelStore) Delete(id int64) error {
 	return nil
 }
 
+type modelWriteState struct {
+	now      time.Time
+	timeText string
+	imageURL string
+	gallery  []string
+	tags     []string
+}
+
 func (s *ModelStore) add(req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
-	req = normalizeCreateModelRequest(req)
-	if req.Name == "" {
-		return models.CarModel{}, errors.New("name is required")
-	}
-	if req.Year < 0 {
-		return models.CarModel{}, errors.New("year must be a positive number")
-	}
-
-	now := time.Now().UTC()
-	timeText := now.Format(time.RFC3339Nano)
-	imageURL := req.ImageURL
-	gallery := normalizeURLList(req.Gallery)
-	tags := normalizeTags(req.Tags)
-
-	galleryJSON, err := marshalStringSlice(gallery)
+	preparedReq, state, err := prepareModelWriteState(req)
 	if err != nil {
-		return models.CarModel{}, fmt.Errorf("marshal gallery: %w", err)
-	}
-	tagsJSON, err := marshalStringSlice(tags)
-	if err != nil {
-		return models.CarModel{}, fmt.Errorf("marshal tags: %w", err)
+		return models.CarModel{}, err
 	}
 
 	tx, err := s.db.Begin()
 	if err != nil {
 		return models.CarModel{}, fmt.Errorf("begin transaction: %w", err)
+	}
+
+	modelID, err := s.insertModelTx(tx, preparedReq, state)
+	if err != nil {
+		_ = tx.Rollback()
+		return models.CarModel{}, err
+	}
+
+	cleanupDir, err := s.applyCreateUploads(tx, modelID, coverFile, galleryFiles, &state)
+	if err != nil {
+		_ = tx.Rollback()
+		s.cleanupCreatedModelDir(modelID, cleanupDir)
+		return models.CarModel{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		s.cleanupCreatedModelDir(modelID, cleanupDir)
+		return models.CarModel{}, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return buildModelResponse(modelID, preparedReq, state, state.now), nil
+}
+
+func prepareModelWriteState(req models.CreateModelRequest) (models.CreateModelRequest, modelWriteState, error) {
+	req = normalizeCreateModelRequest(req)
+	if err := validateModelRequest(req); err != nil {
+		return models.CreateModelRequest{}, modelWriteState{}, err
+	}
+
+	now := time.Now().UTC()
+	state := modelWriteState{
+		now:      now,
+		timeText: now.Format(time.RFC3339Nano),
+		imageURL: req.ImageURL,
+		gallery:  normalizeURLList(req.Gallery),
+		tags:     normalizeTags(req.Tags),
+	}
+	return req, state, nil
+}
+
+func validateModelRequest(req models.CreateModelRequest) error {
+	if req.Name == "" {
+		return errors.New("name is required")
+	}
+	if req.Year < 0 {
+		return errors.New("year must be a positive number")
+	}
+	return nil
+}
+
+func (s *ModelStore) insertModelTx(tx *sql.Tx, req models.CreateModelRequest, state modelWriteState) (int64, error) {
+	galleryJSON, err := marshalStringSlice(state.gallery)
+	if err != nil {
+		return 0, fmt.Errorf("marshal gallery: %w", err)
+	}
+	tagsJSON, err := marshalStringSlice(state.tags)
+	if err != nil {
+		return 0, fmt.Errorf("marshal tags: %w", err)
 	}
 
 	result, err := tx.Exec(`
@@ -171,209 +219,104 @@ func (s *ModelStore) add(req models.CreateModelRequest, coverFile *multipart.Fil
 			image_url, gallery_json, notes, tags_json, created_at, updated_at
 		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, req.Name, req.ModelCode, req.Brand, req.Series, req.Scale, req.Year, req.Color, req.Material, req.Condition,
-		imageURL, galleryJSON, req.Notes, tagsJSON, timeText, timeText)
+		state.imageURL, galleryJSON, req.Notes, tagsJSON, state.timeText, state.timeText)
 	if err != nil {
-		_ = tx.Rollback()
-		return models.CarModel{}, fmt.Errorf("insert model: %w", err)
+		return 0, fmt.Errorf("insert model: %w", err)
 	}
 
 	modelID, err := result.LastInsertId()
 	if err != nil {
-		_ = tx.Rollback()
-		return models.CarModel{}, fmt.Errorf("read inserted id: %w", err)
+		return 0, fmt.Errorf("read inserted id: %w", err)
 	}
-
-	modelDir := filepath.Join(s.imagesRoot, strconv.FormatInt(modelID, 10))
-	shouldCleanupDir := false
-
-	if coverFile != nil || len(galleryFiles) > 0 {
-		if err := os.MkdirAll(modelDir, 0o755); err != nil {
-			_ = tx.Rollback()
-			return models.CarModel{}, fmt.Errorf("create model image directory: %w", err)
-		}
-		shouldCleanupDir = true
-
-		if coverFile != nil {
-			fileName, err := saveUploadedImage(coverFile, modelDir, "cover")
-			if err != nil {
-				_ = tx.Rollback()
-				if shouldCleanupDir {
-					_ = os.RemoveAll(modelDir)
-				}
-				return models.CarModel{}, err
-			}
-			imageURL = buildUploadPath(modelID, fileName)
-		}
-
-		savedGallery := make([]string, 0, len(galleryFiles))
-		for index, header := range galleryFiles {
-			baseName := fmt.Sprintf("gallery_%02d", index+1)
-			fileName, err := saveUploadedImage(header, modelDir, baseName)
-			if err != nil {
-				_ = tx.Rollback()
-				if shouldCleanupDir {
-					_ = os.RemoveAll(modelDir)
-				}
-				return models.CarModel{}, err
-			}
-			savedGallery = append(savedGallery, buildUploadPath(modelID, fileName))
-		}
-
-		if len(savedGallery) > 0 {
-			gallery = savedGallery
-		}
-		if imageURL == "" && len(gallery) > 0 {
-			imageURL = gallery[0]
-		}
-
-		galleryJSON, err = marshalStringSlice(gallery)
-		if err != nil {
-			_ = tx.Rollback()
-			if shouldCleanupDir {
-				_ = os.RemoveAll(modelDir)
-			}
-			return models.CarModel{}, fmt.Errorf("marshal uploaded gallery: %w", err)
-		}
-
-		if _, err := tx.Exec(`
-			UPDATE car_models
-			SET image_url = ?, gallery_json = ?, updated_at = ?
-			WHERE id = ?
-		`, imageURL, galleryJSON, timeText, modelID); err != nil {
-			_ = tx.Rollback()
-			if shouldCleanupDir {
-				_ = os.RemoveAll(modelDir)
-			}
-			return models.CarModel{}, fmt.Errorf("update model images: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		if shouldCleanupDir {
-			_ = os.RemoveAll(modelDir)
-		}
-		return models.CarModel{}, fmt.Errorf("commit transaction: %w", err)
-	}
-
-	return models.CarModel{
-		ID:        modelID,
-		Name:      req.Name,
-		ModelCode: req.ModelCode,
-		Brand:     req.Brand,
-		Series:    req.Series,
-		Scale:     req.Scale,
-		Year:      req.Year,
-		Color:     req.Color,
-		Material:  req.Material,
-		Condition: req.Condition,
-		ImageURL:  imageURL,
-		Gallery:   gallery,
-		Notes:     req.Notes,
-		Tags:      tags,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}, nil
+	return modelID, nil
 }
 
-func (s *ModelStore) update(id int64, req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
-	if id <= 0 {
-		return models.CarModel{}, errors.New("invalid model id")
+func (s *ModelStore) applyCreateUploads(tx *sql.Tx, modelID int64, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader, state *modelWriteState) (bool, error) {
+	if coverFile == nil && len(galleryFiles) == 0 {
+		return false, nil
 	}
 
-	req = normalizeCreateModelRequest(req)
-	if req.Name == "" {
-		return models.CarModel{}, errors.New("name is required")
-	}
-	if req.Year < 0 {
-		return models.CarModel{}, errors.New("year must be a positive number")
+	modelDir := modelImageDir(s.imagesRoot, modelID)
+	if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		return false, fmt.Errorf("create model image directory: %w", err)
 	}
 
-	existing, err := s.getByID(id)
+	if err := applyCoverUpload(modelID, modelDir, coverFile, &state.imageURL); err != nil {
+		return true, err
+	}
+	if err := applyGalleryUpload(modelID, modelDir, galleryFiles, &state.gallery); err != nil {
+		return true, err
+	}
+	ensureImageURLFromGallery(&state.imageURL, state.gallery)
+
+	if err := updateModelImagesTx(tx, modelID, state.imageURL, state.gallery, state.timeText); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func applyCoverUpload(modelID int64, modelDir string, coverFile *multipart.FileHeader, imageURL *string) error {
+	if coverFile == nil {
+		return nil
+	}
+
+	fileName, err := saveUploadedImage(coverFile, modelDir, "cover")
 	if err != nil {
-		return models.CarModel{}, err
+		return err
+	}
+	*imageURL = buildUploadPath(modelID, fileName)
+	return nil
+}
+
+func applyGalleryUpload(modelID int64, modelDir string, galleryFiles []*multipart.FileHeader, gallery *[]string) error {
+	if len(galleryFiles) == 0 {
+		return nil
 	}
 
-	now := time.Now().UTC()
-	timeText := now.Format(time.RFC3339Nano)
-	imageURL := req.ImageURL
-	if imageURL == "" {
-		imageURL = existing.ImageURL
+	savedGallery, err := saveGalleryUploads(modelID, modelDir, galleryFiles)
+	if err != nil {
+		return err
 	}
+	*gallery = savedGallery
+	return nil
+}
 
-	gallery := normalizeURLList(req.Gallery)
-	if len(gallery) == 0 {
-		gallery = existing.Gallery
-	}
-
-	tags := normalizeTags(req.Tags)
-	modelDir := filepath.Join(s.imagesRoot, strconv.FormatInt(id, 10))
-
-	if coverFile != nil || len(galleryFiles) > 0 {
-		if err := os.MkdirAll(modelDir, 0o755); err != nil {
-			return models.CarModel{}, fmt.Errorf("create model image directory: %w", err)
-		}
-	}
-
-	if coverFile != nil {
-		if err := deleteFilesByPrefix(modelDir, "cover"); err != nil {
-			return models.CarModel{}, fmt.Errorf("cleanup existing cover image: %w", err)
-		}
-
-		fileName, err := saveUploadedImage(coverFile, modelDir, "cover")
+func saveGalleryUploads(modelID int64, modelDir string, galleryFiles []*multipart.FileHeader) ([]string, error) {
+	savedGallery := make([]string, 0, len(galleryFiles))
+	for index, header := range galleryFiles {
+		baseName := fmt.Sprintf("gallery_%02d", index+1)
+		fileName, err := saveUploadedImage(header, modelDir, baseName)
 		if err != nil {
-			return models.CarModel{}, err
+			return nil, err
 		}
-		imageURL = buildUploadPath(id, fileName)
+		savedGallery = append(savedGallery, buildUploadPath(modelID, fileName))
 	}
+	return savedGallery, nil
+}
 
-	if len(galleryFiles) > 0 {
-		if err := deleteFilesByPrefix(modelDir, "gallery_"); err != nil {
-			return models.CarModel{}, fmt.Errorf("cleanup existing gallery images: %w", err)
-		}
-
-		savedGallery := make([]string, 0, len(galleryFiles))
-		for index, header := range galleryFiles {
-			baseName := fmt.Sprintf("gallery_%02d", index+1)
-			fileName, err := saveUploadedImage(header, modelDir, baseName)
-			if err != nil {
-				return models.CarModel{}, err
-			}
-			savedGallery = append(savedGallery, buildUploadPath(id, fileName))
-		}
-		gallery = savedGallery
-		if imageURL == "" && len(gallery) > 0 {
-			imageURL = gallery[0]
-		}
+func ensureImageURLFromGallery(imageURL *string, gallery []string) {
+	if *imageURL == "" && len(gallery) > 0 {
+		*imageURL = gallery[0]
 	}
+}
 
+func updateModelImagesTx(tx *sql.Tx, modelID int64, imageURL string, gallery []string, updatedAt string) error {
 	galleryJSON, err := marshalStringSlice(gallery)
 	if err != nil {
-		return models.CarModel{}, fmt.Errorf("marshal gallery: %w", err)
-	}
-	tagsJSON, err := marshalStringSlice(tags)
-	if err != nil {
-		return models.CarModel{}, fmt.Errorf("marshal tags: %w", err)
+		return fmt.Errorf("marshal uploaded gallery: %w", err)
 	}
 
-	result, err := s.db.Exec(`
+	if _, err := tx.Exec(`
 		UPDATE car_models
-		SET name = ?, model_code = ?, brand = ?, series = ?, scale = ?, year = ?, color = ?, material = ?, condition = ?,
-		    image_url = ?, gallery_json = ?, notes = ?, tags_json = ?, updated_at = ?
+		SET image_url = ?, gallery_json = ?, updated_at = ?
 		WHERE id = ?
-	`, req.Name, req.ModelCode, req.Brand, req.Series, req.Scale, req.Year, req.Color, req.Material, req.Condition,
-		imageURL, galleryJSON, req.Notes, tagsJSON, timeText, id)
-	if err != nil {
-		return models.CarModel{}, fmt.Errorf("update model: %w", err)
+	`, imageURL, galleryJSON, updatedAt, modelID); err != nil {
+		return fmt.Errorf("update model images: %w", err)
 	}
+	return nil
+}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return models.CarModel{}, fmt.Errorf("read updated row count: %w", err)
-	}
-	if rows == 0 {
-		return models.CarModel{}, ErrModelNotFound
-	}
-
+func buildModelResponse(id int64, req models.CreateModelRequest, state modelWriteState, createdAt time.Time) models.CarModel {
 	return models.CarModel{
 		ID:        id,
 		Name:      req.Name,
@@ -385,13 +328,153 @@ func (s *ModelStore) update(id int64, req models.CreateModelRequest, coverFile *
 		Color:     req.Color,
 		Material:  req.Material,
 		Condition: req.Condition,
-		ImageURL:  imageURL,
-		Gallery:   gallery,
+		ImageURL:  state.imageURL,
+		Gallery:   state.gallery,
 		Notes:     req.Notes,
-		Tags:      tags,
-		CreatedAt: existing.CreatedAt,
-		UpdatedAt: now,
-	}, nil
+		Tags:      state.tags,
+		CreatedAt: createdAt,
+		UpdatedAt: state.now,
+	}
+}
+
+func modelImageDir(imagesRoot string, modelID int64) string {
+	return filepath.Join(imagesRoot, strconv.FormatInt(modelID, 10))
+}
+
+func (s *ModelStore) cleanupCreatedModelDir(modelID int64, shouldCleanup bool) {
+	if !shouldCleanup {
+		return
+	}
+	_ = os.RemoveAll(modelImageDir(s.imagesRoot, modelID))
+}
+
+func (s *ModelStore) update(id int64, req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
+	preparedReq, state, createdAt, err := s.prepareModelUpdateState(id, req)
+	if err != nil {
+		return models.CarModel{}, err
+	}
+
+	if err := s.applyUpdateUploads(id, coverFile, galleryFiles, &state); err != nil {
+		return models.CarModel{}, err
+	}
+
+	if err := s.persistModelUpdate(id, preparedReq, state); err != nil {
+		return models.CarModel{}, err
+	}
+
+	return buildModelResponse(id, preparedReq, state, createdAt), nil
+}
+
+func (s *ModelStore) prepareModelUpdateState(id int64, req models.CreateModelRequest) (models.CreateModelRequest, modelWriteState, time.Time, error) {
+	if id <= 0 {
+		return models.CreateModelRequest{}, modelWriteState{}, time.Time{}, errors.New("invalid model id")
+	}
+
+	req = normalizeCreateModelRequest(req)
+	if err := validateModelRequest(req); err != nil {
+		return models.CreateModelRequest{}, modelWriteState{}, time.Time{}, err
+	}
+
+	existing, err := s.getByID(id)
+	if err != nil {
+		return models.CreateModelRequest{}, modelWriteState{}, time.Time{}, err
+	}
+
+	now := time.Now().UTC()
+	state := modelWriteState{
+		now:      now,
+		timeText: now.Format(time.RFC3339Nano),
+		imageURL: req.ImageURL,
+		gallery:  normalizeURLList(req.Gallery),
+		tags:     normalizeTags(req.Tags),
+	}
+	if state.imageURL == "" {
+		state.imageURL = existing.ImageURL
+	}
+	if len(state.gallery) == 0 {
+		state.gallery = existing.Gallery
+	}
+
+	return req, state, existing.CreatedAt, nil
+}
+
+func (s *ModelStore) applyUpdateUploads(id int64, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader, state *modelWriteState) error {
+	if coverFile == nil && len(galleryFiles) == 0 {
+		return nil
+	}
+
+	modelDir := modelImageDir(s.imagesRoot, id)
+	if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		return fmt.Errorf("create model image directory: %w", err)
+	}
+
+	if err := replaceCoverUpload(id, modelDir, coverFile, &state.imageURL); err != nil {
+		return err
+	}
+	if err := replaceGalleryUpload(id, modelDir, galleryFiles, &state.gallery, &state.imageURL); err != nil {
+		return err
+	}
+	return nil
+}
+
+func replaceCoverUpload(modelID int64, modelDir string, coverFile *multipart.FileHeader, imageURL *string) error {
+	if coverFile == nil {
+		return nil
+	}
+
+	if err := deleteFilesByPrefix(modelDir, "cover"); err != nil {
+		return fmt.Errorf("cleanup existing cover image: %w", err)
+	}
+	if err := applyCoverUpload(modelID, modelDir, coverFile, imageURL); err != nil {
+		return err
+	}
+	return nil
+}
+
+func replaceGalleryUpload(modelID int64, modelDir string, galleryFiles []*multipart.FileHeader, gallery *[]string, imageURL *string) error {
+	if len(galleryFiles) == 0 {
+		return nil
+	}
+
+	if err := deleteFilesByPrefix(modelDir, "gallery_"); err != nil {
+		return fmt.Errorf("cleanup existing gallery images: %w", err)
+	}
+	if err := applyGalleryUpload(modelID, modelDir, galleryFiles, gallery); err != nil {
+		return err
+	}
+	ensureImageURLFromGallery(imageURL, *gallery)
+	return nil
+}
+
+func (s *ModelStore) persistModelUpdate(id int64, req models.CreateModelRequest, state modelWriteState) error {
+	galleryJSON, err := marshalStringSlice(state.gallery)
+	if err != nil {
+		return fmt.Errorf("marshal gallery: %w", err)
+	}
+	tagsJSON, err := marshalStringSlice(state.tags)
+	if err != nil {
+		return fmt.Errorf("marshal tags: %w", err)
+	}
+
+	result, err := s.db.Exec(`
+		UPDATE car_models
+		SET name = ?, model_code = ?, brand = ?, series = ?, scale = ?, year = ?, color = ?, material = ?, condition = ?,
+		    image_url = ?, gallery_json = ?, notes = ?, tags_json = ?, updated_at = ?
+		WHERE id = ?
+	`, req.Name, req.ModelCode, req.Brand, req.Series, req.Scale, req.Year, req.Color, req.Material, req.Condition,
+		state.imageURL, galleryJSON, req.Notes, tagsJSON, state.timeText, id)
+	if err != nil {
+		return fmt.Errorf("update model: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read updated row count: %w", err)
+	}
+	if rows == 0 {
+		return ErrModelNotFound
+	}
+	return nil
 }
 
 func (s *ModelStore) getByID(id int64) (models.CarModel, error) {
@@ -442,91 +525,149 @@ func (s *ModelStore) initSchema() error {
 }
 
 func (s *ModelStore) seedFromLegacyDataIfNeeded() error {
-	if strings.TrimSpace(s.legacyDataPath) == "" {
+	if !s.hasLegacySeedPath() {
 		return nil
 	}
 
-	var count int
-	if err := s.db.QueryRow(`SELECT COUNT(1) FROM car_models`).Scan(&count); err != nil {
-		return fmt.Errorf("count existing models: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	data, err := os.ReadFile(s.legacyDataPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+	shouldSeed, err := s.isLegacySeedRequired()
 	if err != nil {
-		return fmt.Errorf("read legacy data file: %w", err)
+		return err
 	}
-	if len(strings.TrimSpace(string(data))) == 0 {
+	if !shouldSeed {
 		return nil
 	}
 
-	var legacyItems []models.CarModel
-	if err := json.Unmarshal(data, &legacyItems); err != nil {
-		log.Printf("[data] skip legacy import from %s due to parse error: %v", s.legacyDataPath, err)
-		return nil
-	}
-	if len(legacyItems) == 0 {
-		return nil
-	}
-
-	tx, err := s.db.Begin()
+	data, shouldImport, err := s.loadLegacySeedData()
 	if err != nil {
-		return fmt.Errorf("begin legacy import transaction: %w", err)
+		return err
+	}
+	if !shouldImport {
+		return nil
 	}
 
-	nextID := int64(1)
-	usedIDs := make(map[int64]struct{}, len(legacyItems))
-	for _, item := range legacyItems {
-		item = normalizeLegacyItem(item)
-
-		if item.ID <= 0 {
-			item.ID = nextID
-		}
-		if _, exists := usedIDs[item.ID]; exists {
-			item.ID = nextID
-		}
-		usedIDs[item.ID] = struct{}{}
-		if item.ID >= nextID {
-			nextID = item.ID + 1
-		}
-
-		tagsJSON, err := marshalStringSlice(normalizeTags(item.Tags))
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("marshal legacy tags: %w", err)
-		}
-		galleryJSON, err := marshalStringSlice(normalizeURLList(item.Gallery))
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("marshal legacy gallery: %w", err)
-		}
-
-		if _, err := tx.Exec(`
-			INSERT INTO car_models(
-				id, name, model_code, brand, series, scale, year, color, material, condition,
-				image_url, gallery_json, notes, tags_json, created_at, updated_at
-			) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, item.ID, item.Name, item.ModelCode, item.Brand, item.Series, item.Scale, item.Year, item.Color,
-			item.Material, item.Condition, item.ImageURL, galleryJSON, item.Notes, tagsJSON,
-			item.CreatedAt.Format(time.RFC3339Nano), item.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("insert legacy model %d: %w", item.ID, err)
-		}
+	legacyItems, shouldImport := parseLegacySeedModels(data, s.legacyDataPath)
+	if !shouldImport {
+		return nil
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit legacy import transaction: %w", err)
+	if err := s.importLegacyModels(legacyItems); err != nil {
+		return err
 	}
 
 	log.Printf("[data] imported %d models from %s into SQLite", len(legacyItems), s.legacyDataPath)
 	return nil
 }
 
+func (s *ModelStore) hasLegacySeedPath() bool {
+	return strings.TrimSpace(s.legacyDataPath) != ""
+}
+
+func (s *ModelStore) isLegacySeedRequired() (bool, error) {
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(1) FROM car_models`).Scan(&count); err != nil {
+		return false, fmt.Errorf("count existing models: %w", err)
+	}
+	return count == 0, nil
+}
+
+func (s *ModelStore) loadLegacySeedData() ([]byte, bool, error) {
+	data, err := os.ReadFile(s.legacyDataPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("read legacy data file: %w", err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return nil, false, nil
+	}
+	return data, true, nil
+}
+
+func parseLegacySeedModels(data []byte, sourcePath string) ([]models.CarModel, bool) {
+	var legacyItems []models.CarModel
+	if err := json.Unmarshal(data, &legacyItems); err != nil {
+		log.Printf("[data] skip legacy import from %s due to parse error: %v", sourcePath, err)
+		return nil, false
+	}
+	if len(legacyItems) == 0 {
+		return nil, false
+	}
+	return legacyItems, true
+}
+
+type legacyImportState struct {
+	nextID  int64
+	usedIDs map[int64]struct{}
+}
+
+func newLegacyImportState(size int) legacyImportState {
+	return legacyImportState{
+		nextID:  1,
+		usedIDs: make(map[int64]struct{}, size),
+	}
+}
+
+func (s *legacyImportState) allocateID(candidate int64) int64 {
+	id := candidate
+	if id <= 0 {
+		id = s.nextID
+	}
+	if _, exists := s.usedIDs[id]; exists {
+		id = s.nextID
+	}
+	s.usedIDs[id] = struct{}{}
+	if id >= s.nextID {
+		s.nextID = id + 1
+	}
+	return id
+}
+
+func (s *ModelStore) importLegacyModels(legacyItems []models.CarModel) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin legacy import transaction: %w", err)
+	}
+
+	state := newLegacyImportState(len(legacyItems))
+	for _, raw := range legacyItems {
+		item := normalizeLegacyItem(raw)
+		item.ID = state.allocateID(item.ID)
+
+		if err := insertLegacyModelTx(tx, item); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit legacy import transaction: %w", err)
+	}
+	return nil
+}
+
+func insertLegacyModelTx(tx *sql.Tx, item models.CarModel) error {
+	tagsJSON, err := marshalStringSlice(normalizeTags(item.Tags))
+	if err != nil {
+		return fmt.Errorf("marshal legacy tags: %w", err)
+	}
+	galleryJSON, err := marshalStringSlice(normalizeURLList(item.Gallery))
+	if err != nil {
+		return fmt.Errorf("marshal legacy gallery: %w", err)
+	}
+
+	if _, err := tx.Exec(`
+		INSERT INTO car_models(
+			id, name, model_code, brand, series, scale, year, color, material, condition,
+			image_url, gallery_json, notes, tags_json, created_at, updated_at
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, item.ID, item.Name, item.ModelCode, item.Brand, item.Series, item.Scale, item.Year, item.Color,
+		item.Material, item.Condition, item.ImageURL, galleryJSON, item.Notes, tagsJSON,
+		item.CreatedAt.Format(time.RFC3339Nano), item.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
+		return fmt.Errorf("insert legacy model %d: %w", item.ID, err)
+	}
+	return nil
+}
 func normalizeLegacyItem(item models.CarModel) models.CarModel {
 	now := time.Now().UTC()
 	item.Name = strings.TrimSpace(item.Name)
