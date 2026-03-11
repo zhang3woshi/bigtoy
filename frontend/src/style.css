@@ -28,6 +28,10 @@ body {
     linear-gradient(180deg, #091018 0%, #05080d 100%);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 .page {
   padding: 28px clamp(16px, 3vw, 42px) 42px;
 }
@@ -424,6 +428,58 @@ body {
   padding: 16px;
 }
 
+.detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+
+.detail-modal.hidden {
+  display: none;
+}
+
+.detail-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 10, 16, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.detail-modal-panel {
+  position: relative;
+  width: min(1280px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(6, 12, 18, 0.74);
+  padding: 42px 20px 20px;
+  z-index: 1;
+}
+
+.detail-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(9, 16, 25, 0.92);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.detail-modal-close:hover {
+  border-color: rgba(234, 181, 74, 0.7);
+  color: var(--accent);
+}
+
 .detail-main {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 12px;
@@ -541,5 +597,14 @@ body {
 
   .detail-main {
     height: 280px;
+  }
+
+  .detail-modal {
+    padding: 12px;
+  }
+
+  .detail-modal-panel {
+    max-height: calc(100vh - 24px);
+    padding: 40px 10px 10px;
   }
 }

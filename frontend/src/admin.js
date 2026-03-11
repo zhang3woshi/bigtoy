@@ -58,9 +58,10 @@ function clearFileInputs() {
 }
 
 function fillFormForEdit(item) {
+  const normalizedBrand = String(item.brand || "").trim().toLowerCase() === "matchbox" ? "MatchBox" : item.brand || "";
   formEl.elements.namedItem("name").value = item.name || "";
   formEl.elements.namedItem("modelCode").value = item.modelCode || "";
-  formEl.elements.namedItem("brand").value = item.brand || "";
+  formEl.elements.namedItem("brand").value = normalizedBrand;
   formEl.elements.namedItem("series").value = item.series || "";
   formEl.elements.namedItem("scale").value = item.scale || "";
   formEl.elements.namedItem("year").value = Number.isFinite(item.year) ? String(item.year) : "";

@@ -71,12 +71,25 @@ func Register() error {
 
 func applyTransportSecurityConfig() error {
 	runMode := strings.ToLower(strings.TrimSpace(web.BConfig.RunMode))
-	forceHTTPSDefault := runMode != "dev"
+	isDevMode := runMode == "dev"
+	forceHTTPSDefault := !isDevMode
 	forceHTTPS := readEnvOrConfigBool("BIGTOY_FORCE_HTTPS", "force_https", forceHTTPSDefault)
 
-	enableHTTP := readEnvOrConfigBool("BIGTOY_ENABLE_HTTP", "enablehttp", web.BConfig.Listen.EnableHTTP)
-	enableHTTPS := readEnvOrConfigBool("BIGTOY_ENABLE_HTTPS", "enablehttps", web.BConfig.Listen.EnableHTTPS)
-	if forceHTTPS {
+	enableHTTPDefault := web.BConfig.Listen.EnableHTTP
+	enableHTTPSDefault := web.BConfig.Listen.EnableHTTPS
+	if isDevMode {
+		enableHTTPDefault = true
+		enableHTTPSDefault = false
+	}
+
+	enableHTTP := readEnvOrConfigBool("BIGTOY_ENABLE_HTTP", "enablehttp", enableHTTPDefault)
+	enableHTTPS := readEnvOrConfigBool("BIGTOY_ENABLE_HTTPS", "enablehttps", enableHTTPSDefault)
+	if isDevMode {
+		if forceHTTPS {
+			log.Printf("[dev] BIGTOY_FORCE_HTTPS=true detected; HTTP remains enabled for local debugging")
+		}
+		enableHTTP = true
+	} else if forceHTTPS {
 		enableHTTPS = true
 		enableHTTP = false
 	}
@@ -111,15 +124,39 @@ func applyTransportSecurityConfig() error {
 		certPath := strings.TrimSpace(web.BConfig.Listen.HTTPSCertFile)
 		keyPath := strings.TrimSpace(web.BConfig.Listen.HTTPSKeyFile)
 		if certPath == "" || keyPath == "" {
-			return fmt.Errorf("HTTPS is enabled but certificate or key file is missing; set BIGTOY_HTTPS_CERT_FILE/BIGTOY_HTTPS_KEY_FILE or https_cert_file/https_key_file")
+			if isDevMode {
+				log.Printf("[dev] HTTPS is enabled but certificate or key file is missing; disabling HTTPS and keeping HTTP enabled")
+				web.BConfig.Listen.EnableHTTPS = false
+			} else {
+				return fmt.Errorf("HTTPS is enabled but certificate or key file is missing; set BIGTOY_HTTPS_CERT_FILE/BIGTOY_HTTPS_KEY_FILE or https_cert_file/https_key_file")
+			}
 		}
 
-		if !exists(certPath) {
-			return fmt.Errorf("HTTPS certificate file not found: %s", certPath)
+		if web.BConfig.Listen.EnableHTTPS && !exists(certPath) {
+			if isDevMode {
+				log.Printf("[dev] HTTPS certificate file not found (%s); disabling HTTPS and keeping HTTP enabled", certPath)
+				web.BConfig.Listen.EnableHTTPS = false
+			} else {
+				return fmt.Errorf("HTTPS certificate file not found: %s", certPath)
+			}
 		}
-		if !exists(keyPath) {
-			return fmt.Errorf("HTTPS key file not found: %s", keyPath)
+		if web.BConfig.Listen.EnableHTTPS && !exists(keyPath) {
+			if isDevMode {
+				log.Printf("[dev] HTTPS key file not found (%s); disabling HTTPS and keeping HTTP enabled", keyPath)
+				web.BConfig.Listen.EnableHTTPS = false
+			} else {
+				return fmt.Errorf("HTTPS key file not found: %s", keyPath)
+			}
 		}
+	}
+
+	if isDevMode {
+		// Keep localhost debugging reliable regardless of inherited production-style env vars.
+		web.BConfig.Listen.EnableHTTP = true
+	}
+
+	if !web.BConfig.Listen.EnableHTTP && !web.BConfig.Listen.EnableHTTPS {
+		return fmt.Errorf("invalid listen config: both HTTP and HTTPS are disabled")
 	}
 
 	if web.BConfig.Listen.EnableHTTPS && !web.BConfig.Listen.EnableHTTP {
@@ -128,6 +165,7 @@ func applyTransportSecurityConfig() error {
 
 	return nil
 }
+
 func resolveBackendRoot() string {
 	if exists(filepath.Join("conf", "app.conf")) {
 		return "."
@@ -182,19 +220,48 @@ func buildCORSOptions() *cors.Options {
 }
 
 func resolveAllowedOrigins() []string {
+	runMode := strings.ToLower(strings.TrimSpace(web.BConfig.RunMode))
 	raw := strings.TrimSpace(readEnvOrConfig("BIGTOY_ALLOWED_ORIGINS", "allowed_origins", ""))
+	devDefaults := []string{"http://localhost:5173", "http://127.0.0.1:5173"}
+
 	if raw == "" {
-		return []string{"http://localhost:5173", "http://127.0.0.1:5173"}
+		return devDefaults
 	}
 
 	parts := strings.Split(raw, ",")
-	origins := make([]string, 0, len(parts))
+	origins := make([]string, 0, len(parts)+len(devDefaults))
 	for _, part := range parts {
 		origin := strings.TrimSpace(part)
 		if origin == "" {
 			continue
 		}
 		origins = append(origins, origin)
+	}
+
+	if runMode == "dev" {
+		origins = appendMissingOrigins(origins, devDefaults...)
+	}
+
+	return origins
+}
+
+func appendMissingOrigins(origins []string, extras ...string) []string {
+	for _, extra := range extras {
+		candidate := strings.TrimSpace(extra)
+		if candidate == "" {
+			continue
+		}
+
+		exists := false
+		for _, origin := range origins {
+			if strings.EqualFold(strings.TrimSpace(origin), candidate) {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			origins = append(origins, candidate)
+		}
 	}
 	return origins
 }
@@ -225,6 +292,10 @@ func resolveAuthConfig() (services.AuthConfig, error) {
 	cookieName := strings.TrimSpace(readEnvOrConfig("BIGTOY_AUTH_COOKIE_NAME", "auth_cookie_name", "bigtoy_admin_session"))
 	secureDefault := runMode != "dev"
 	requireSecureCookie := readEnvOrConfigBool("BIGTOY_AUTH_SECURE_COOKIE", "auth_secure_cookie", secureDefault)
+	if runMode == "dev" && web.BConfig.Listen.EnableHTTP && requireSecureCookie {
+		log.Printf("[dev] BIGTOY_AUTH_SECURE_COOKIE=true detected while HTTP is enabled; forcing insecure cookie for local debugging")
+		requireSecureCookie = false
+	}
 	maxAttempts := readEnvOrConfigInt("BIGTOY_AUTH_MAX_FAILED_ATTEMPTS", "auth_max_failed_attempts", 5)
 	lockoutMinutes := readEnvOrConfigInt("BIGTOY_AUTH_LOCKOUT_MINUTES", "auth_lockout_minutes", 15)
 

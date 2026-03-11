@@ -42,6 +42,46 @@
       </section>
     </main>
 
+    <div id="detail-modal" class="detail-modal hidden" aria-hidden="true">
+      <div id="detail-modal-backdrop" class="detail-modal-backdrop"></div>
+      <div class="detail-modal-panel" role="dialog" aria-modal="true" aria-labelledby="detail-modal-name">
+        <button id="detail-modal-close" class="detail-modal-close" type="button" aria-label="关闭详情">
+          ×
+        </button>
+
+        <div id="detail-modal-empty" class="state-card hidden">未找到该车模，可能已被删除。</div>
+
+        <article id="detail-modal-card" class="detail-card hidden">
+          <section class="detail-gallery">
+            <div class="detail-main">
+              <img id="detail-modal-main-image" alt="" />
+              <div id="detail-modal-main-placeholder" class="cover-placeholder hidden">No Image</div>
+            </div>
+            <div id="detail-modal-thumbs" class="detail-thumbs"></div>
+          </section>
+
+          <section class="detail-info">
+            <h2 id="detail-modal-name"></h2>
+            <p id="detail-modal-code" class="model-code"></p>
+            <p id="detail-modal-sub" class="sub"></p>
+            <p id="detail-modal-meta" class="meta"></p>
+
+            <dl class="detail-grid">
+              <dt>颜色</dt>
+              <dd id="detail-modal-color">-</dd>
+              <dt>材质</dt>
+              <dd id="detail-modal-material">-</dd>
+              <dt>创建时间</dt>
+              <dd id="detail-modal-created-at">-</dd>
+            </dl>
+
+            <div id="detail-modal-tags" class="tags"></div>
+            <p id="detail-modal-notes" class="note"></p>
+          </section>
+        </article>
+      </div>
+    </div>
+
     <script type="module" src="/src/public.js"></script>
   </body>
 </html>
