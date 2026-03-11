@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -71,6 +72,9 @@ func (p *program) Stop(_ service.Service) error {
 func main() {
 	if err := ensureWorkingDirectory(); err != nil {
 		log.Fatalf("failed to prepare working directory: %v", err)
+	}
+	if err := loadSecretsEnvFile(); err != nil {
+		log.Fatalf("failed to load secrets file: %v", err)
 	}
 
 	svc, err := service.New(&program{}, &service.Config{
@@ -187,6 +191,103 @@ func printServiceUsage() {
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func loadSecretsEnvFile() error {
+	secretsPath := resolveSecretsFilePath()
+	lines, loaded, err := readSecretsLines(secretsPath)
+	if err != nil {
+		return err
+	}
+	if !loaded {
+		return nil
+	}
+
+	for idx, rawLine := range lines {
+		key, value, skip, err := parseSecretsLine(rawLine, idx, secretsPath)
+		if err != nil {
+			return err
+		}
+		if skip {
+			continue
+		}
+		if err := setEnvIfAbsent(key, value, secretsPath); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("[config] loaded secrets from %s", secretsPath)
+	return nil
+}
+
+func resolveSecretsFilePath() string {
+	secretsPath := strings.TrimSpace(os.Getenv("BIGTOY_SECRETS_FILE"))
+	if secretsPath != "" {
+		return secretsPath
+	}
+	return filepath.Join("conf", "secrets.env")
+}
+
+func readSecretsLines(secretsPath string) ([]string, bool, error) {
+	content, err := os.ReadFile(secretsPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("read secrets file %s: %w", secretsPath, err)
+	}
+
+	return strings.Split(string(content), "\n"), true, nil
+}
+
+func parseSecretsLine(rawLine string, index int, secretsPath string) (key string, value string, skip bool, err error) {
+	line := strings.TrimSpace(rawLine)
+	if index == 0 {
+		line = strings.TrimPrefix(line, "\uFEFF")
+	}
+	if line == "" || strings.HasPrefix(line, "#") {
+		return "", "", true, nil
+	}
+	if strings.HasPrefix(line, "export ") {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+	}
+
+	sep := strings.Index(line, "=")
+	if sep <= 0 {
+		return "", "", false, fmt.Errorf("invalid line %d in %s", index+1, secretsPath)
+	}
+
+	key = strings.TrimSpace(line[:sep])
+	value = strings.TrimSpace(line[sep+1:])
+	if key == "" {
+		return "", "", false, fmt.Errorf("empty key on line %d in %s", index+1, secretsPath)
+	}
+
+	return key, stripOptionalQuotes(value), false, nil
+}
+
+func stripOptionalQuotes(value string) string {
+	if len(value) < 2 {
+		return value
+	}
+
+	first := value[0]
+	last := value[len(value)-1]
+	if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+		return value[1 : len(value)-1]
+	}
+	return value
+}
+
+func setEnvIfAbsent(key, value, secretsPath string) error {
+	if _, alreadySet := os.LookupEnv(key); alreadySet {
+		return nil
+	}
+
+	if err := os.Setenv(key, value); err != nil {
+		return fmt.Errorf("set env %s from %s: %w", key, secretsPath, err)
+	}
+	return nil
 }
 
 func registerApplication() error {

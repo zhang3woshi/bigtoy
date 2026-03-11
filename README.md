@@ -96,6 +96,30 @@ admin_password_hash = the_hash_from_previous_step
 auth_secure_cookie = true
 ```
 
+### 4) Load sensitive values from local file (recommended for open-source repos)
+
+1. Copy template:
+
+```powershell
+cd backend
+Copy-Item .\conf\secrets.env.example .\conf\secrets.env
+```
+
+2. Edit `conf/secrets.env` and fill real values.
+
+3. Start backend normally:
+
+```powershell
+go run main.go
+```
+
+The program auto-loads `conf/secrets.env` on startup. This file is git-ignored.
+
+You can also specify a custom secrets file path:
+
+```powershell
+$env:BIGTOY_SECRETS_FILE="C:\secure\bigtoy.secrets.env"
+```
 ## Install As System Service (kardianos/service)
 
 The backend executable now supports service lifecycle commands.
@@ -183,3 +207,4 @@ Important:
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
+
