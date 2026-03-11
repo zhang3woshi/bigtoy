@@ -35,19 +35,23 @@
       <section class="hero">
         <div class="hero-left">
           <div class="hero-content">
-            <div class="hero-copy">
-              <h2>把你的火柴盒与风火轮收藏做成在线车模库</h2>
-              <p>按品牌、系列、年份快速浏览，把收藏内容清晰展示在一个页面里。</p>
-            </div>
-
-            <section class="filters">
-              <input id="search-input" class="input" type="search" placeholder="搜索名称 / 编号 / 系列 / 标签" />
-              <select id="brand-filter" class="input">
-                <option value="all">全部品牌</option>
-              </select>
+            <section class="hero-panel hero-copy-panel" aria-label="页面介绍">
+              <div class="hero-copy">
+                <h2>把你的火柴盒与风火轮收藏做成在线车模库</h2>
+                <p>按品牌、系列、年份快速浏览，把收藏内容清晰展示在一个页面里。</p>
+              </div>
             </section>
 
-            <section class="hero-board" aria-label="收藏看板">
+            <section class="hero-panel hero-search-panel" aria-label="搜索筛选">
+              <div class="filters">
+                <input id="search-input" class="input" type="search" placeholder="搜索名称 / 编号 / 系列 / 标签" />
+                <select id="brand-filter" class="input">
+                  <option value="all">全部品牌</option>
+                </select>
+              </div>
+            </section>
+
+            <section class="hero-board hero-panel hero-board-panel" aria-label="收藏看板">
               <p class="hero-board-title">收藏看板</p>
               <div class="hero-board-grid">
                 <article class="hero-board-item">

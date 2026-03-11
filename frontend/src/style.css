@@ -152,6 +152,324 @@ body.modal-open {
   color: var(--accent-2);
 }
 
+/* Flat homepage theme (public page only) */
+body.page-public {
+  --public-bg: #0c131a;
+  --public-surface: #0f1a24;
+  --public-panel: #132231;
+  --public-panel-soft: #182b3d;
+  --public-line: #27435a;
+  --public-line-strong: #3a6280;
+  --public-text-soft: #98afc0;
+  --public-accent: #57c4d8;
+  --public-accent-soft: #8fd9e6;
+  background: var(--public-bg);
+}
+
+.page-public .topbar {
+  margin-bottom: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--public-line);
+  border-radius: 10px;
+  background: var(--public-panel);
+}
+
+.page-public .brand-block {
+  gap: 10px;
+}
+
+.page-public .brand-kicker {
+  color: var(--public-text-soft);
+}
+
+.page-public .brand-title-art {
+  background: none;
+  color: #f3f8fb;
+  text-shadow: none;
+}
+
+.page-public .brand-icon {
+  border-radius: 10px;
+  border-color: var(--public-line);
+  background: var(--public-surface);
+  color: var(--public-accent);
+}
+
+.page-public .topbar-actions {
+  gap: 10px;
+}
+
+.page-public .nav-link,
+.page-public .hero-entry-link {
+  border-radius: 8px;
+  border-color: var(--public-line);
+  background: var(--public-surface);
+  font-weight: 600;
+}
+
+.page-public .nav-link:hover,
+.page-public .hero-entry-link:hover {
+  border-color: var(--public-line-strong);
+}
+
+.page-public .hero-entry-link {
+  min-width: 126px;
+}
+
+.page-public .topbar-stat {
+  width: 168px;
+  min-height: 56px;
+  border-radius: 8px;
+  border: 1px solid var(--public-line);
+  background: var(--public-surface);
+}
+
+.page-public .topbar-stat span {
+  font-size: 32px;
+  color: var(--public-accent);
+}
+
+.page-public .topbar-stat small {
+  color: var(--public-text-soft);
+}
+
+.page-public .hero {
+  background: var(--public-panel);
+  border-color: var(--public-line);
+  border-radius: 10px;
+  padding: 16px;
+  gap: 16px;
+}
+
+.page-public .hero-content {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: 10px;
+}
+
+.page-public .hero-panel {
+  border: 1px solid var(--public-line);
+  border-radius: 10px;
+  background: var(--public-surface);
+  padding: 12px 14px;
+}
+
+.page-public .hero-copy-panel {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.page-public .hero-search-panel {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.page-public .hero-board-panel {
+  padding-top: 10px;
+}
+
+.page-public .hero-copy h2 {
+  font-size: clamp(23px, 2.3vw, 31px);
+  line-height: 1.25;
+}
+
+.page-public .hero-copy p {
+  margin-top: 8px;
+  color: var(--public-text-soft);
+}
+
+.page-public .filters {
+  gap: 10px;
+}
+
+.page-public .input {
+  height: 42px;
+  border-radius: 8px;
+  border-color: var(--public-line);
+  background: var(--public-panel);
+  padding: 9px 12px;
+}
+
+.page-public .input:focus {
+  outline: none;
+  border-color: var(--public-line-strong);
+}
+
+.page-public .hero-board-title {
+  margin: 0;
+  color: var(--public-text-soft);
+}
+
+.page-public .hero-board-grid {
+  margin-top: 6px;
+  gap: 10px;
+}
+
+.page-public .hero-board-item {
+  border-radius: 8px;
+  border-color: var(--public-line);
+  background: var(--public-panel-soft);
+}
+
+.page-public .hero-board-item small {
+  color: var(--public-text-soft);
+}
+
+.page-public .hero-board-item strong {
+  font-size: 18px;
+  color: #f3f8fb;
+}
+
+.page-public .hero-board-meta {
+  color: var(--public-accent-soft);
+}
+
+.page-public .hero-random {
+  border-radius: 10px;
+  border-color: var(--public-line);
+  background: var(--public-surface);
+}
+
+.page-public .hero-random-badge {
+  border-radius: 6px;
+  border: 1px solid var(--public-line);
+  background: var(--public-panel-soft);
+  color: var(--public-accent-soft);
+}
+
+.page-public .hero-random-line {
+  height: 1px;
+  margin-bottom: 0;
+  background: var(--public-line);
+}
+
+.page-public .hero-random-window {
+  border-radius: 8px;
+  border-color: var(--public-line);
+  background: #0b141d;
+}
+
+.page-public .hero-random-slide {
+  background: #122131;
+}
+
+.page-public .hero-random-nav {
+  border-color: var(--public-line);
+  background: rgba(11, 20, 29, 0.86);
+  color: #d3e4ee;
+}
+
+.page-public .hero-random-nav:hover {
+  border-color: var(--public-line-strong);
+  color: #ffffff;
+}
+
+.page-public .hero-random-overlay {
+  background: rgba(10, 18, 26, 0.84);
+  padding: 12px 12px 10px;
+}
+
+.page-public .hero-random-caption {
+  color: #f5f9fb;
+  text-shadow: none;
+}
+
+.page-public .hero-random-dot {
+  background: rgba(211, 228, 238, 0.42);
+}
+
+.page-public .hero-random-dot.active {
+  background: var(--public-accent);
+}
+
+.page-public .model-card {
+  border-radius: 10px;
+  border-color: var(--public-line);
+  background: var(--public-surface);
+  transition: border-color 0.2s ease;
+}
+
+.page-public .model-card:hover {
+  transform: none;
+  border-color: var(--public-line-strong);
+}
+
+.page-public .cover {
+  background: #122131;
+}
+
+.page-public .model-code {
+  color: #d3b06a;
+}
+
+.page-public .sub {
+  color: var(--public-accent);
+}
+
+.page-public .meta,
+.page-public .note {
+  color: var(--public-text-soft);
+}
+
+.page-public .tag {
+  border-color: var(--public-line);
+  color: #a8cfde;
+  background: var(--public-panel);
+}
+
+.page-public .state-card {
+  border-radius: 8px;
+  border: 1px solid var(--public-line);
+  background: var(--public-surface);
+  color: var(--public-text-soft);
+}
+
+.page-public .detail-modal-backdrop {
+  backdrop-filter: none;
+  background: rgba(7, 12, 18, 0.78);
+}
+
+.page-public .detail-modal-panel {
+  border: 1px solid var(--public-line);
+  border-radius: 10px;
+  background: #0f1a25;
+}
+
+.page-public .detail-modal-close {
+  border-color: var(--public-line);
+  background: #101c28;
+}
+
+.page-public .detail-modal-close:hover {
+  border-color: var(--public-line-strong);
+  color: #f3f8fb;
+}
+
+.page-public .detail-card {
+  border-color: var(--public-line);
+  background: #132232;
+}
+
+.page-public .detail-main {
+  border-color: var(--public-line);
+  background: #122131;
+}
+
+.page-public .thumb-btn.active {
+  border-color: var(--public-accent);
+}
+
+.page-public .site-footer a {
+  color: #7f9cb0;
+}
+
+.page-public .site-footer a:hover {
+  color: var(--public-accent-soft);
+}
+
 .hero {
   border-radius: var(--radius);
   border: 1px solid rgba(255, 255, 255, 0.08);
