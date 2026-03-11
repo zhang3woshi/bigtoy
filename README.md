@@ -22,6 +22,28 @@ BigToy is a die-cast model gallery + admin backend.
 - Image root: `backend/data/images`
 - Public image URL mapping: `/uploads/<id>/<file>`
 
+## Automatic Backup
+
+Backend now includes a scheduled backup job:
+
+- Source: `backend/data/models.db` + `backend/data/images/`
+- Output: `backend/data/backup/backup_*.zip`
+- Retention: keep latest 3 backups, delete the oldest when exceeded
+
+Config (in `backend/conf/app.conf` or env vars):
+
+```ini
+backup_enabled = true
+backup_interval_minutes = 1440
+backup_max_files = 3
+```
+
+Environment variable equivalents:
+
+- `BIGTOY_BACKUP_ENABLED`
+- `BIGTOY_BACKUP_INTERVAL_MINUTES`
+- `BIGTOY_BACKUP_MAX_FILES`
+
 ## Run Locally
 
 ### Backend

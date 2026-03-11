@@ -16,6 +16,8 @@ import (
 	"bigtoy/backend/services"
 )
 
+var backupScheduler *services.BackupService
+
 func Register() error {
 	backendRoot := resolveBackendRoot()
 	dataDir := filepath.Join(backendRoot, "data")
@@ -33,6 +35,10 @@ func Register() error {
 		return fmt.Errorf("failed to initialize model store: %w", err)
 	}
 	controllers.SetModelStore(store)
+
+	if err := startBackupScheduler(dbPath, uploadsPath, filepath.Join(dataDir, "backup")); err != nil {
+		return fmt.Errorf("failed to initialize backup scheduler: %w", err)
+	}
 
 	authConfig, err := resolveAuthConfig()
 	if err != nil {
@@ -352,4 +358,36 @@ func readEnvOrConfigBool(envKey, configKey string, fallback bool) bool {
 		return fallback
 	}
 	return value
+}
+
+func startBackupScheduler(dbPath, imagesPath, backupDir string) error {
+	if backupScheduler != nil {
+		return nil
+	}
+
+	enabled := readEnvOrConfigBool("BIGTOY_BACKUP_ENABLED", "backup_enabled", true)
+	if !enabled {
+		log.Printf("[backup] scheduler is disabled by configuration")
+		return nil
+	}
+
+	intervalMinutes := readEnvOrConfigInt("BIGTOY_BACKUP_INTERVAL_MINUTES", "backup_interval_minutes", 1440)
+	maxBackups := readEnvOrConfigInt("BIGTOY_BACKUP_MAX_FILES", "backup_max_files", 3)
+	config := services.BackupServiceConfig{
+		DBPath:     dbPath,
+		ImagesRoot: imagesPath,
+		BackupDir:  backupDir,
+		Interval:   time.Duration(intervalMinutes) * time.Minute,
+		MaxBackups: maxBackups,
+	}
+
+	scheduler, err := services.NewBackupService(config)
+	if err != nil {
+		return err
+	}
+	scheduler.Start()
+	backupScheduler = scheduler
+
+	log.Printf("[backup] scheduler started: interval=%s max_backups=%d backup_dir=%s", config.Interval, config.MaxBackups, backupDir)
+	return nil
 }
