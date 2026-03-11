@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BigToy Garage | 录入车型</title>
+    <script type="module" crossorigin src="/assets/admin-Dwn6ZiHq.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/api-BP5h_7wt.js">
+    <link rel="stylesheet" crossorigin href="/assets/api-CuT-Q1GJ.css">
+  </head>
+  <body class="page page-admin">
+    <header class="topbar">
+      <div class="brand-block">
+        <p class="brand-kicker">Collection Management</p>
+        <h1 class="brand-title">车型录入后台</h1>
+      </div>
+      <div class="topbar-actions">
+        <a class="nav-link" href="/index.html">返回展示页</a>
+        <button id="logout-btn" type="button" class="btn-secondary">退出登录</button>
+      </div>
+    </header>
+
+    <main class="layout admin-layout">
+      <section class="panel">
+        <h2 id="form-title">新增车型</h2>
+        <p class="panel-hint" id="form-hint">保存后会立即出现在对外展示页。</p>
+
+        <form id="model-form" class="model-form" enctype="multipart/form-data">
+          <div class="grid-two">
+            <label>
+              车型名称 *
+              <input name="name" class="input" required placeholder="例如：Toyota Supra MK4" />
+            </label>
+            <label>
+              编号
+              <input name="modelCode" class="input" placeholder="例如：MB1177 / HW-202" />
+            </label>
+          </div>
+
+          <div class="grid-two">
+            <label>
+              品牌
+              <select name="brand" class="input">
+                <option value="">请选择</option>
+                <option value="Hot Wheels">Hot Wheels</option>
+                <option value="Matchbox">Matchbox</option>
+                <option value="Tomica">Tomica</option>
+                <option value="Mini GT">Mini GT</option>
+              </select>
+            </label>
+            <label>
+              系列
+              <input name="series" class="input" placeholder="例如：Premium / Collectors" />
+            </label>
+          </div>
+
+          <div class="grid-two">
+            <label>
+              比例
+              <input name="scale" class="input" placeholder="例如：1:64" />
+            </label>
+            <label>
+              年份
+              <input name="year" type="number" min="0" class="input" placeholder="例如：1995" />
+            </label>
+          </div>
+
+          <div class="grid-two">
+            <label>
+              颜色
+              <input name="color" class="input" placeholder="例如：Metallic Blue" />
+            </label>
+            <label>
+              品相
+              <input name="condition" class="input" placeholder="例如：Mint / Near Mint" />
+            </label>
+          </div>
+
+          <label>
+            材质
+            <input name="material" class="input" placeholder="例如：Die-cast" />
+          </label>
+
+          <label>
+            主图文件
+            <input name="imageFile" type="file" accept="image/*" class="input" />
+          </label>
+
+          <label>
+            更多图片文件（可多选）
+            <input name="galleryFiles" type="file" accept="image/*" multiple class="input" />
+          </label>
+
+          <label>
+            标签（逗号分隔）
+            <input name="tags" class="input" placeholder="JDM, Rally, Classic" />
+          </label>
+
+          <label>
+            备注
+            <textarea name="notes" class="input textarea" rows="3" placeholder="可填写来源、批次、版本等信息"></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button id="submit-btn" type="submit" class="btn-primary">保存车型</button>
+            <button id="cancel-edit-btn" type="button" class="btn-secondary hidden">取消编辑</button>
+          </div>
+        </form>
+
+        <p id="form-status" class="form-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <h2>车型列表</h2>
+        <div id="recent-list" class="recent-list"></div>
+      </section>
+    </main>
+
+  </body>
+</html>

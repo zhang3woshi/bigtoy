@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BigToy Garage | 车模详情</title>
+    <script type="module" crossorigin src="/assets/model-BUaoHRDX.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/api-BP5h_7wt.js">
+    <link rel="stylesheet" crossorigin href="/assets/api-CuT-Q1GJ.css">
+  </head>
+  <body class="page page-detail">
+    <header class="topbar">
+      <div class="brand-block">
+        <p class="brand-kicker">Model Detail</p>
+        <h1 class="brand-title">车模详情</h1>
+      </div>
+      <div class="topbar-actions">
+        <a class="nav-link" href="/index.html">返回展厅</a>
+        <a class="nav-link" href="/login.html">模型录入</a>
+      </div>
+    </header>
+
+    <main class="layout detail-layout">
+      <div id="detail-loading" class="state-card">正在加载详情...</div>
+      <div id="detail-error" class="state-card state-error hidden"></div>
+      <div id="detail-empty" class="state-card hidden">未找到该车模，可能已被删除。</div>
+
+      <article id="detail-card" class="detail-card hidden">
+        <section class="detail-gallery">
+          <div class="detail-main">
+            <img id="detail-main-image" alt="" />
+            <div id="detail-main-placeholder" class="cover-placeholder hidden">No Image</div>
+          </div>
+          <div id="detail-thumbs" class="detail-thumbs"></div>
+        </section>
+
+        <section class="detail-info">
+          <h2 id="detail-name"></h2>
+          <p id="detail-code" class="model-code"></p>
+          <p id="detail-sub" class="sub"></p>
+          <p id="detail-meta" class="meta"></p>
+
+          <dl class="detail-grid">
+            <dt>颜色</dt>
+            <dd id="detail-color">-</dd>
+            <dt>材质</dt>
+            <dd id="detail-material">-</dd>
+            <dt>创建时间</dt>
+            <dd id="detail-created-at">-</dd>
+          </dl>
+
+          <div id="detail-tags" class="tags"></div>
+          <p id="detail-notes" class="note"></p>
+        </section>
+      </article>
+    </main>
+
+  </body>
+</html>

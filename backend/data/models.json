@@ -1,0 +1,50 @@
+﻿[
+    {
+        "id":  1,
+        "name":  "Nissan Skyline GT-R (R34)",
+        "modelCode":  "HW-001",
+        "brand":  "Hot Wheels",
+        "series":  "Fast \u0026 Furious",
+        "scale":  "1:64",
+        "year":  1999,
+        "color":  "Bayside Blue",
+        "material":  "Die-cast",
+        "condition":  "Mint",
+        "imageUrl":  "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format\u0026fit=crop\u0026w=900\u0026q=80",
+        "notes":  "收藏编号 HW-001",
+        "tags":  [
+                     "JDM",
+                     "Movie"
+                 ],
+        "createdAt":  "2026-03-10T10:00:00Z",
+        "updatedAt":  "2026-03-10T10:00:00Z",
+        "gallery":  [
+                        "https://images.unsplash.com/photo-1489824904134-891ab64532f1?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+                        "https://images.unsplash.com/photo-1494905998402-395d579af36f?auto=format\u0026fit=crop\u0026w=1200\u0026q=80"
+                    ]
+    },
+    {
+        "id":  2,
+        "name":  "Porsche 911 Carrera",
+        "modelCode":  "MB1177",
+        "brand":  "Matchbox",
+        "series":  "Collectors",
+        "scale":  "1:64",
+        "year":  1974,
+        "color":  "Silver",
+        "material":  "Die-cast",
+        "condition":  "Near Mint",
+        "imageUrl":  "https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?auto=format\u0026fit=crop\u0026w=900\u0026q=80",
+        "notes":  "盒况良好",
+        "tags":  [
+                     "Classic",
+                     "Porsche"
+                 ],
+        "createdAt":  "2026-03-10T10:05:00Z",
+        "updatedAt":  "2026-03-10T10:05:00Z",
+        "gallery":  [
+                        "https://images.unsplash.com/photo-1617469767053-6d6f0f9e5f16?auto=format\u0026fit=crop\u0026w=1200\u0026q=80"
+                    ]
+    }
+]
+
