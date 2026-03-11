@@ -76,6 +76,24 @@ powershell -ExecutionPolicy Bypass -File .\sync-frontend-static.ps1
 
 This exports frontend assets into `backend/static`.
 
+## GitHub Release Automation
+
+This repository includes a GitHub Actions workflow at `.github/workflows/release.yml`.
+
+- Trigger: push a tag matching `v*` (for example: `v1.0.0`)
+- Behavior:
+  - Build frontend and export assets to `backend/static`
+  - Cross-compile backend for Linux/macOS/Windows (`amd64`)
+  - Package runtime files (`conf/`, `static/`, basic `data/` folders, `README`, `LICENSE`)
+  - Publish all archives to GitHub Release with auto-generated notes
+
+Example:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ## Initialize Admin Password
 
 Use bcrypt hash in config or environment variables.

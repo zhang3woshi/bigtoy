@@ -7,3 +7,4 @@ backend/*.exe
 backend/conf/secrets.env
 backend/conf/secrets.local.env
 backend/data/
+dist/

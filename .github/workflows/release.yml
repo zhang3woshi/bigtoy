@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend static files
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:backend
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Build release packages
+        shell: bash
+        working-directory: backend
+        run: |
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF_NAME}"
+          DIST_DIR="../dist"
+          mkdir -p "${DIST_DIR}"
+
+          TARGETS=(
+            "linux amd64"
+            "darwin amd64"
+            "windows amd64"
+          )
+
+          for target in "${TARGETS[@]}"; do
+            read -r GOOS GOARCH <<<"${target}"
+
+            PACKAGE_DIR="${DIST_DIR}/bigtoy_${VERSION}_${GOOS}_${GOARCH}"
+            BIN_NAME="bigtoy"
+            if [[ "${GOOS}" == "windows" ]]; then
+              BIN_NAME="${BIN_NAME}.exe"
+            fi
+
+            rm -rf "${PACKAGE_DIR}"
+            mkdir -p "${PACKAGE_DIR}"
+
+            GOOS="${GOOS}" GOARCH="${GOARCH}" CGO_ENABLED=0 \
+              go build -trimpath -ldflags="-s -w" -o "${PACKAGE_DIR}/${BIN_NAME}" .
+
+            cp -R conf "${PACKAGE_DIR}/conf"
+            cp -R static "${PACKAGE_DIR}/static"
+            mkdir -p "${PACKAGE_DIR}/data/images" "${PACKAGE_DIR}/data/backup"
+            if [[ -f data/models.json ]]; then
+              cp data/models.json "${PACKAGE_DIR}/data/models.json"
+            fi
+
+            cp ../README.md "${PACKAGE_DIR}/README.md"
+            cp ../LICENSE "${PACKAGE_DIR}/LICENSE"
+
+            tar -C "${DIST_DIR}" -czf "${DIST_DIR}/bigtoy_${VERSION}_${GOOS}_${GOARCH}.tar.gz" "$(basename "${PACKAGE_DIR}")"
+          done
+
+          (
+            cd "${DIST_DIR}"
+            sha256sum ./*.tar.gz > SHA256SUMS.txt
+          )
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
