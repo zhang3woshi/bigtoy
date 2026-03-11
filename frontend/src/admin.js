@@ -5,12 +5,18 @@ const formTitleEl = document.getElementById("form-title");
 const formHintEl = document.getElementById("form-hint");
 const statusEl = document.getElementById("form-status");
 const recentEl = document.getElementById("recent-list");
+const recentPaginationEl = document.getElementById("recent-pagination");
+const recentPageStatusEl = document.getElementById("recent-page-status");
+const recentPagePrevEl = document.getElementById("recent-page-prev");
+const recentPageNextEl = document.getElementById("recent-page-next");
 const submitBtn = document.getElementById("submit-btn");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
 let currentModels = [];
 let editingModelID = null;
+let currentPage = 1;
+const pageSize = 10;
 
 function escapeHTML(value) {
   return String(value ?? "")
@@ -122,6 +128,37 @@ function buildPayloadFormData(form) {
   return formData;
 }
 
+function getTotalPages(total) {
+  return Math.max(1, Math.ceil(total / pageSize));
+}
+
+function renderPagination(total) {
+  if (!recentPaginationEl || !recentPageStatusEl || !recentPagePrevEl || !recentPageNextEl) {
+    return;
+  }
+
+  if (!total || total <= pageSize) {
+    recentPaginationEl.classList.add("hidden");
+    recentPageStatusEl.textContent = "";
+    return;
+  }
+
+  const totalPages = getTotalPages(total);
+  if (currentPage > totalPages) {
+    currentPage = totalPages;
+  }
+  if (currentPage < 1) {
+    currentPage = 1;
+  }
+
+  const start = (currentPage - 1) * pageSize + 1;
+  const end = Math.min(currentPage * pageSize, total);
+  recentPageStatusEl.textContent = `第 ${currentPage} / ${totalPages} 页 · 显示 ${start}-${end} / ${total}`;
+  recentPagePrevEl.disabled = currentPage <= 1;
+  recentPageNextEl.disabled = currentPage >= totalPages;
+  recentPaginationEl.classList.remove("hidden");
+}
+
 function renderRecent(items) {
   if (items.length === 0) {
     recentEl.innerHTML = '<p class="muted">还没有任何车型，先录入一台吧。</p>';
@@ -131,9 +168,15 @@ function renderRecent(items) {
   recentEl.innerHTML = items
     .map((item) => {
       const galleryCount = Array.isArray(item.gallery) ? item.gallery.length : 0;
+      const thumb = item.imageUrl
+        ? `<img src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.name)} thumbnail" loading="lazy" />`
+        : '<div class="recent-thumb-placeholder">No Image</div>';
       return `
       <article class="recent-item">
         <div class="recent-row">
+          <div class="recent-thumb">
+            ${thumb}
+          </div>
           <div class="recent-main">
             <strong>${escapeHTML(item.name)}</strong>
             <span>#${escapeHTML(item.id)} · ${escapeHTML(item.brand || "Unknown")} · 编号 ${escapeHTML(item.modelCode || "未填写")} · 附图 ${galleryCount}</span>

@@ -7,6 +7,15 @@ const gridEl = document.getElementById("model-grid");
 const searchEl = document.getElementById("search-input");
 const brandEl = document.getElementById("brand-filter");
 const totalEl = document.getElementById("total-count");
+const brandCountEl = document.getElementById("hero-brand-count");
+const tagCountEl = document.getElementById("hero-tag-count");
+const latestModelEl = document.getElementById("hero-latest-model");
+const latestMetaEl = document.getElementById("hero-latest-meta");
+const randomSlideEl = document.getElementById("hero-random-slide");
+const randomCaptionEl = document.getElementById("hero-random-caption");
+const randomDotsEl = document.getElementById("hero-random-dots");
+const randomPrevEl = document.getElementById("hero-random-prev");
+const randomNextEl = document.getElementById("hero-random-next");
 const detailModalEl = document.getElementById("detail-modal");
 const detailModalBackdropEl = document.getElementById("detail-modal-backdrop");
 const detailModalCloseEl = document.getElementById("detail-modal-close");
@@ -34,6 +43,13 @@ const state = {
 
 let imageList = [];
 let activeImageIndex = 0;
+const randomCount = 5;
+const randomSlideInterval = 4200;
+const randomRefreshInterval = 30000;
+let randomRefreshTimer = null;
+let randomSlideTimer = null;
+let randomModels = [];
+let randomIndex = 0;
 
 function escapeHTML(value) {
   return String(value ?? "")
@@ -94,6 +110,132 @@ function renderCard(item) {
       </article>
     </a>
   `;
+}
+
+function shuffle(array) {
+  const cloned = [...array];
+  for (let i = cloned.length - 1; i > 0; i -= 1) {
+    const randomIndex = Math.floor(Math.random() * (i + 1));
+    [cloned[i], cloned[randomIndex]] = [cloned[randomIndex], cloned[i]];
+  }
+  return cloned;
+}
+
+function formatRandomModel(item) {
+  const name = String(item.name || "未命名车型").trim();
+  const brand = String(item.brand || "Unknown").trim();
+  const modelCode = String(item.modelCode || "").trim();
+  return modelCode ? `${name} · ${brand} · 编号 ${modelCode}` : `${name} · ${brand}`;
+}
+
+function renderRandomDots() {
+  if (!randomDotsEl) {
+    return;
+  }
+  randomDotsEl.innerHTML = randomModels
+    .map(
+      (_item, index) =>
+        `<button type="button" class="hero-random-dot ${index === randomIndex ? "active" : ""}" data-index="${index}" aria-label="切换到第 ${index + 1} 条"></button>`,
+    )
+    .join("");
+}
+
+function stopRandomTimers() {
+  if (randomSlideTimer) {
+    window.clearInterval(randomSlideTimer);
+    randomSlideTimer = null;
+  }
+  if (randomRefreshTimer) {
+    window.clearInterval(randomRefreshTimer);
+    randomRefreshTimer = null;
+  }
+}
+
+function setRandomSlide(index) {
+  if (!randomSlideEl || !randomCaptionEl) {
+    return;
+  }
+
+  if (randomModels.length === 0) {
+    randomSlideEl.innerHTML = '<div class="hero-random-empty">暂无车模</div>';
+    randomCaptionEl.textContent = "暂无车模";
+    if (randomDotsEl) {
+      randomDotsEl.innerHTML = "";
+    }
+    return;
+  }
+
+  const max = randomModels.length;
+  randomIndex = ((index % max) + max) % max;
+  const item = randomModels[randomIndex];
+  const imageURL = String(item.imageUrl || "").trim();
+
+  if (imageURL) {
+    randomSlideEl.innerHTML = `<img src="${escapeHTML(imageURL)}" alt="${escapeHTML(item.name || "车模图片")}" loading="lazy" />`;
+  } else {
+    randomSlideEl.innerHTML = '<div class="hero-random-empty">No Image</div>';
+  }
+
+  randomCaptionEl.textContent = formatRandomModel(item);
+  renderRandomDots();
+}
+
+function renderRandomShowcase() {
+  if (!randomSlideEl || !randomCaptionEl) {
+    return;
+  }
+
+  if (state.all.length === 0) {
+    randomModels = [];
+    randomIndex = 0;
+    setRandomSlide(0);
+    return;
+  }
+
+  const selected = shuffle(state.all).slice(0, Math.min(randomCount, state.all.length));
+  if (selected.length === 0) {
+    randomModels = [];
+    randomIndex = 0;
+    setRandomSlide(0);
+    return;
+  }
+
+  const normalized = [];
+  for (let i = 0; i < randomCount; i += 1) {
+    normalized.push(selected[i % selected.length]);
+  }
+
+  randomModels = normalized;
+  randomIndex = 0;
+  setRandomSlide(randomIndex);
+}
+
+function startRandomShowcase() {
+  stopRandomTimers();
+
+  renderRandomShowcase();
+
+  if (randomModels.length > 1) {
+    randomSlideTimer = window.setInterval(() => {
+      setRandomSlide(randomIndex + 1);
+    }, randomSlideInterval);
+  }
+
+  if (state.all.length > randomCount) {
+    randomRefreshTimer = window.setInterval(renderRandomShowcase, randomRefreshInterval);
+  }
+}
+
+function restartRandomSlideTimer() {
+  if (randomSlideTimer) {
+    window.clearInterval(randomSlideTimer);
+    randomSlideTimer = null;
+  }
+  if (randomModels.length > 1) {
+    randomSlideTimer = window.setInterval(() => {
+      setRandomSlide(randomIndex + 1);
+    }, randomSlideInterval);
+  }
 }
 
 function formatTime(value) {
@@ -259,6 +401,46 @@ function updateState() {
 
 function renderGrid() {
   totalEl.textContent = String(state.all.length);
+  if (brandCountEl) {
+    brandCountEl.textContent = String(new Set(state.all.map((item) => String(item.brand || "").trim()).filter(Boolean)).size);
+  }
+  if (tagCountEl) {
+    const tagSet = new Set(
+      state.all
+        .flatMap((item) => (Array.isArray(item.tags) ? item.tags : []))
+        .map((tag) => String(tag || "").trim())
+        .filter(Boolean),
+    );
+    tagCountEl.textContent = String(tagSet.size);
+  }
+  if (latestModelEl || latestMetaEl) {
+    const latest = [...state.all].sort((a, b) => {
+      const aTime = new Date(a.createdAt).getTime() || 0;
+      const bTime = new Date(b.createdAt).getTime() || 0;
+      if (aTime !== bTime) {
+        return bTime - aTime;
+      }
+      return Number(b.id || 0) - Number(a.id || 0);
+    })[0];
+    if (latest) {
+      const latestName = String(latest.name || "未命名车型").trim();
+      const latestBrand = String(latest.brand || "Unknown").trim();
+      const latestCode = String(latest.modelCode || "").trim();
+      if (latestModelEl) {
+        latestModelEl.textContent = latestName || "-";
+      }
+      if (latestMetaEl) {
+        latestMetaEl.textContent = latestCode ? `${latestBrand} · 编号 ${latestCode}` : latestBrand || "暂无数据";
+      }
+    } else {
+      if (latestModelEl) {
+        latestModelEl.textContent = "-";
+      }
+      if (latestMetaEl) {
+        latestMetaEl.textContent = "暂无数据";
+      }
+    }
+  }
 
   if (state.filtered.length === 0) {
     emptyEl.classList.remove("hidden");
@@ -289,15 +471,60 @@ async function bootstrap() {
     loadingEl.classList.add("hidden");
     populateBrands();
     renderGrid();
+    startRandomShowcase();
   } catch (error) {
     loadingEl.classList.add("hidden");
     errorEl.classList.remove("hidden");
     errorEl.textContent = `加载失败：${error.message}`;
+    if (randomSlideEl) {
+      randomModels = [];
+      randomIndex = 0;
+      randomSlideEl.innerHTML = '<div class="hero-random-empty">加载失败</div>';
+    }
+    if (randomCaptionEl) {
+      randomCaptionEl.textContent = "加载失败";
+    }
+    if (randomDotsEl) {
+      randomDotsEl.innerHTML = "";
+    }
   }
 }
 
 searchEl.addEventListener("input", updateState);
 brandEl.addEventListener("change", updateState);
+randomPrevEl?.addEventListener("click", () => {
+  if (randomModels.length === 0) {
+    return;
+  }
+  setRandomSlide(randomIndex - 1);
+  restartRandomSlideTimer();
+});
+randomNextEl?.addEventListener("click", () => {
+  if (randomModels.length === 0) {
+    return;
+  }
+  setRandomSlide(randomIndex + 1);
+  restartRandomSlideTimer();
+});
+randomDotsEl?.addEventListener("click", (event) => {
+  const trigger = event.target.closest(".hero-random-dot[data-index]");
+  if (!trigger || !randomDotsEl.contains(trigger)) {
+    return;
+  }
+  const index = Number.parseInt(trigger.dataset.index || "", 10);
+  if (!Number.isInteger(index)) {
+    return;
+  }
+  setRandomSlide(index);
+  restartRandomSlideTimer();
+});
+randomSlideEl?.addEventListener("click", () => {
+  const active = randomModels[randomIndex];
+  const modelID = Number(active?.id);
+  if (Number.isInteger(modelID) && modelID > 0) {
+    openDetailModal(modelID);
+  }
+});
 gridEl.addEventListener("click", (event) => {
   const trigger = event.target.closest(".card-link[data-model-id]");
   if (!trigger || !gridEl.contains(trigger)) {
@@ -318,6 +545,9 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !detailModalEl.classList.contains("hidden")) {
     closeDetailModal();
   }
+});
+window.addEventListener("beforeunload", () => {
+  stopRandomTimers();
 });
 
 bootstrap();
