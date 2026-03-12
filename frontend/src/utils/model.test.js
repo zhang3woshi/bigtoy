@@ -25,17 +25,19 @@ describe("model utils", () => {
   });
 
   it("builds detail href with model id", () => {
-    expect(buildModelDetailHref({ id: 12 })).toBe("/model.html?id=12");
+    expect(buildModelDetailHref({ id: "4f2f38b2-292d-4da1-b90d-adf346910280" })).toBe(
+      "/model.html?id=4f2f38b2-292d-4da1-b90d-adf346910280",
+    );
     expect(buildModelDetailHref({})).toBe("/model.html");
   });
 
   it("finds latest model using createdAt then id", () => {
     const latest = findLatestModel([
-      { id: 3, createdAt: "2026-03-10T10:00:00Z" },
-      { id: 5, createdAt: "2026-03-10T10:00:00Z" },
-      { id: 4, createdAt: "2026-03-09T10:00:00Z" },
+      { id: "a2f9d26d-4974-4f6a-8a59-9cc7c56da098", createdAt: "2026-03-10T10:00:00Z" },
+      { id: "b2f9d26d-4974-4f6a-8a59-9cc7c56da098", createdAt: "2026-03-10T10:00:00Z" },
+      { id: "44c4b8a6-8443-4f19-a6a3-2e6a9d2ab875", createdAt: "2026-03-09T10:00:00Z" },
     ]);
-    expect(latest).toEqual({ id: 5, createdAt: "2026-03-10T10:00:00Z" });
+    expect(latest).toEqual({ id: "b2f9d26d-4974-4f6a-8a59-9cc7c56da098", createdAt: "2026-03-10T10:00:00Z" });
   });
 
   it("lists unique brands in locale sort order", () => {

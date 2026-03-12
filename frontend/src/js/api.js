@@ -1,5 +1,6 @@
 ﻿const DEFAULT_API_BASE = import.meta.env.DEV ? "http://localhost:8080" : window.location.origin;
 const API_BASE = (import.meta.env.VITE_API_BASE || DEFAULT_API_BASE).replace(/\/$/, "");
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function parseJSONResponse(response) {
   const payload = await response.json().catch(() => ({}));
@@ -47,8 +48,8 @@ export async function createModel(input) {
 }
 
 export async function updateModel(id, input) {
-  const modelID = Number.parseInt(id, 10);
-  if (!Number.isFinite(modelID) || modelID <= 0) {
+  const modelID = String(id || "").trim();
+  if (!UUID_PATTERN.test(modelID)) {
     throw new Error("invalid model id");
   }
 
@@ -75,8 +76,8 @@ export async function updateModel(id, input) {
 }
 
 export async function deleteModel(id) {
-  const modelID = Number.parseInt(id, 10);
-  if (!Number.isFinite(modelID) || modelID <= 0) {
+  const modelID = String(id || "").trim();
+  if (!UUID_PATTERN.test(modelID)) {
     throw new Error("invalid model id");
   }
 

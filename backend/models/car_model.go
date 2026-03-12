@@ -4,7 +4,7 @@ import "time"
 
 // CarModel represents one collectible die-cast model in the library.
 type CarModel struct {
-	ID        int64     `json:"id"`
+	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	ModelCode string    `json:"modelCode"`
 	Brand     string    `json:"brand"`

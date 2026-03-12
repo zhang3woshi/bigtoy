@@ -31,9 +31,8 @@ const showEmpty = computed(() => !loading.value && !errorMessage.value && !model
 const showCard = computed(() => !loading.value && !errorMessage.value && !!model.value);
 
 onMounted(async () => {
-  const idValue = new URLSearchParams(window.location.search).get("id");
-  const modelID = Number.parseInt(String(idValue || ""), 10);
-  if (!Number.isInteger(modelID) || modelID <= 0) {
+  const modelID = String(new URLSearchParams(window.location.search).get("id") || "").trim();
+  if (!modelID) {
     errorMessage.value = "详情链接缺少有效的车型 ID。";
     loading.value = false;
     return;
@@ -41,7 +40,7 @@ onMounted(async () => {
 
   try {
     const models = await fetchModels();
-    model.value = models.find((entry) => Number(entry.id) === modelID) || null;
+    model.value = models.find((entry) => String(entry?.id || "").trim() === modelID) || null;
     if (model.value) {
       document.title = `${model.value.name || "车模详情"} | BigToy Garage`;
     }

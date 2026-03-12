@@ -1,5 +1,5 @@
 <template>
-  <a class="card-link" :href="detailHref" @click="handleClick">
+  <a class="card-link" :href="detailHref" @click.prevent="handleClick">
     <article class="model-card">
       <div class="cover">
         <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name || '车模图片'" loading="lazy" />
@@ -38,11 +38,11 @@ const detailHref = computed(() => buildModelDetailHref(props.item));
 const modelCodeLabel = computed(() => getModelCodeLabel(props.item?.modelCode));
 
 function handleClick(event) {
-  const modelID = Number(props.item?.id);
-  if (!Number.isInteger(modelID) || modelID <= 0) {
+  void event;
+  const modelID = String(props.item?.id || "").trim();
+  if (!modelID) {
     return;
   }
-  event.preventDefault();
   emit("open", modelID);
 }
 </script>

@@ -248,6 +248,9 @@ body.page-public {
   background: transparent;
   padding: 0;
   gap: 10px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-public .hero-panel {
@@ -265,10 +268,15 @@ body.page-public {
 .page-public .hero-search-panel {
   padding-top: 10px;
   padding-bottom: 10px;
+  flex: 0 0 auto;
 }
 
 .page-public .hero-board-panel {
   padding-top: 10px;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .page-public .hero-copy h2 {
@@ -306,6 +314,8 @@ body.page-public {
 .page-public .hero-board-grid {
   margin-top: 6px;
   gap: 10px;
+  flex: 1;
+  align-content: start;
 }
 
 .page-public .hero-board-item {
@@ -321,6 +331,11 @@ body.page-public {
 .page-public .hero-board-item strong {
   font-size: 18px;
   color: #f3f8fb;
+}
+
+.page-public .hero-board-item-total strong {
+  font-size: 24px;
+  color: var(--public-accent);
 }
 
 .page-public .hero-board-meta {
@@ -496,6 +511,7 @@ body.page-public {
 
 .hero-left {
   min-height: 100%;
+  display: flex;
 }
 
 .hero-entry-link {
@@ -541,9 +557,11 @@ body.page-public {
   border-radius: 14px;
   background: rgba(8, 18, 28, 0.28);
   padding: 14px;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
+  width: 100%;
+  height: 100%;
 }
 
 .hero-board-title {

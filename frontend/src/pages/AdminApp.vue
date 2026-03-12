@@ -239,7 +239,7 @@ const statusKind = ref("info");
 
 const form = reactive(createInitialForm());
 
-const isEditing = computed(() => Number.isInteger(editingModelID.value) && editingModelID.value > 0);
+const isEditing = computed(() => typeof editingModelID.value === "string" && editingModelID.value.length > 0);
 const formTitle = computed(() => (isEditing.value ? `编辑车型 #${editingModelID.value}` : "新增车型"));
 const formHint = computed(() =>
   isEditing.value
@@ -323,7 +323,7 @@ function cancelEdit() {
 }
 
 function startEdit(item) {
-  editingModelID.value = Number(item.id);
+  editingModelID.value = String(item.id || "").trim();
   Object.assign(form, {
     name: item.name || "",
     modelCode: item.modelCode || "",
@@ -464,8 +464,8 @@ async function handleSubmit() {
 }
 
 async function handleDelete(item) {
-  const modelID = Number(item.id);
-  if (!Number.isInteger(modelID) || modelID <= 0) {
+  const modelID = String(item.id || "").trim();
+  if (!modelID) {
     setStatus("无效的车型 ID。", "error");
     return;
   }
@@ -478,7 +478,7 @@ async function handleDelete(item) {
   deletingModelID.value = modelID;
   try {
     await deleteModel(modelID);
-    if (Number(editingModelID.value) === modelID) {
+    if (editingModelID.value === modelID) {
       cancelEdit();
     }
     setStatus("删除成功。", "success");

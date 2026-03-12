@@ -71,15 +71,16 @@ func TestFileFilters(t *testing.T) {
 }
 
 func TestParseModelID(t *testing.T) {
-	controller := newModelControllerForTest(http.MethodPut, "/api/models/7", nil, "application/json")
-	controller.Ctx.Input.SetParam(":id", "7")
+	modelID := "4f2f38b2-292d-4da1-b90d-adf346910280"
+	controller := newModelControllerForTest(http.MethodPut, "/api/models/"+modelID, nil, "application/json")
+	controller.Ctx.Input.SetParam(":id", modelID)
 
 	id, err := parseModelID(controller)
 	if err != nil {
 		t.Fatalf("parse model id should succeed: %v", err)
 	}
-	if id != 7 {
-		t.Fatalf("expected id 7, got %d", id)
+	if id != modelID {
+		t.Fatalf("expected id %s, got %s", modelID, id)
 	}
 
 	controller.Ctx.Input.SetParam(":id", "")

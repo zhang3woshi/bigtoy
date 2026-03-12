@@ -18,6 +18,7 @@ import (
 
 	"bigtoy/backend/models"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
 
@@ -109,20 +110,29 @@ func (s *ModelStore) AddWithUploads(req models.CreateModelRequest, coverFile *mu
 	return s.add(req, coverFile, galleryFiles)
 }
 
-func (s *ModelStore) Update(id int64, req models.CreateModelRequest) (models.CarModel, error) {
+func (s *ModelStore) Update(id string, req models.CreateModelRequest) (models.CarModel, error) {
 	return s.update(id, req, nil, nil)
 }
 
-func (s *ModelStore) UpdateWithUploads(id int64, req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
+func (s *ModelStore) UpdateWithUploads(id string, req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
 	return s.update(id, req, coverFile, galleryFiles)
 }
 
-func (s *ModelStore) Delete(id int64) error {
-	if id <= 0 {
+func (s *ModelStore) Delete(id string) error {
+	normalizedID, err := normalizeModelID(id)
+	if err != nil {
 		return errors.New("invalid model id")
 	}
 
-	result, err := s.db.Exec(`DELETE FROM car_models WHERE id = ?`, id)
+	existing, err := s.getByID(normalizedID)
+	if err != nil {
+		if errors.Is(err, ErrModelNotFound) {
+			return ErrModelNotFound
+		}
+		return err
+	}
+
+	result, err := s.db.Exec(`DELETE FROM car_models WHERE id = ?`, normalizedID)
 	if err != nil {
 		return fmt.Errorf("delete model: %w", err)
 	}
@@ -135,9 +145,10 @@ func (s *ModelStore) Delete(id int64) error {
 		return ErrModelNotFound
 	}
 
-	modelDir := filepath.Join(s.imagesRoot, strconv.FormatInt(id, 10))
-	if err := os.RemoveAll(modelDir); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("remove model image directory failed (id=%d): %v", id, err)
+	for _, dir := range collectImageDirsForModel(s.imagesRoot, existing, normalizedID) {
+		if err := os.RemoveAll(dir); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Printf("remove model image directory failed (id=%s): %v", normalizedID, err)
+		}
 	}
 
 	return nil
@@ -210,35 +221,32 @@ func validateModelRequest(req models.CreateModelRequest) error {
 	return nil
 }
 
-func (s *ModelStore) insertModelTx(tx *sql.Tx, req models.CreateModelRequest, state modelWriteState) (int64, error) {
+func (s *ModelStore) insertModelTx(tx *sql.Tx, req models.CreateModelRequest, state modelWriteState) (string, error) {
+	modelID := uuid.NewString()
+
 	galleryJSON, err := marshalStringSlice(state.gallery)
 	if err != nil {
-		return 0, fmt.Errorf("marshal gallery: %w", err)
+		return "", fmt.Errorf("marshal gallery: %w", err)
 	}
 	tagsJSON, err := marshalStringSlice(state.tags)
 	if err != nil {
-		return 0, fmt.Errorf("marshal tags: %w", err)
+		return "", fmt.Errorf("marshal tags: %w", err)
 	}
 
-	result, err := tx.Exec(`
+	if _, err := tx.Exec(`
 		INSERT INTO car_models(
+			id,
 			name, model_code, brand, series, scale, year, color, material, condition,
 			image_url, gallery_json, notes, tags_json, created_at, updated_at
-		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, req.Name, req.ModelCode, req.Brand, req.Series, req.Scale, req.Year, req.Color, req.Material, req.Condition,
-		state.imageURL, galleryJSON, req.Notes, tagsJSON, state.timeText, state.timeText)
-	if err != nil {
-		return 0, fmt.Errorf("insert model: %w", err)
-	}
-
-	modelID, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("read inserted id: %w", err)
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, modelID, req.Name, req.ModelCode, req.Brand, req.Series, req.Scale, req.Year, req.Color, req.Material, req.Condition,
+		state.imageURL, galleryJSON, req.Notes, tagsJSON, state.timeText, state.timeText); err != nil {
+		return "", fmt.Errorf("insert model: %w", err)
 	}
 	return modelID, nil
 }
 
-func (s *ModelStore) applyCreateUploads(tx *sql.Tx, modelID int64, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader, state *modelWriteState) (bool, error) {
+func (s *ModelStore) applyCreateUploads(tx *sql.Tx, modelID string, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader, state *modelWriteState) (bool, error) {
 	if coverFile == nil && len(galleryFiles) == 0 {
 		return false, nil
 	}
@@ -262,7 +270,7 @@ func (s *ModelStore) applyCreateUploads(tx *sql.Tx, modelID int64, coverFile *mu
 	return true, nil
 }
 
-func applyCoverUpload(modelID int64, modelDir string, coverFile *multipart.FileHeader, imageURL *string) error {
+func applyCoverUpload(modelID string, modelDir string, coverFile *multipart.FileHeader, imageURL *string) error {
 	if coverFile == nil {
 		return nil
 	}
@@ -275,7 +283,7 @@ func applyCoverUpload(modelID int64, modelDir string, coverFile *multipart.FileH
 	return nil
 }
 
-func applyGalleryUpload(modelID int64, modelDir string, galleryFiles []*multipart.FileHeader, gallery *[]string) error {
+func applyGalleryUpload(modelID string, modelDir string, galleryFiles []*multipart.FileHeader, gallery *[]string) error {
 	if len(galleryFiles) == 0 {
 		return nil
 	}
@@ -288,7 +296,7 @@ func applyGalleryUpload(modelID int64, modelDir string, galleryFiles []*multipar
 	return nil
 }
 
-func saveGalleryUploads(modelID int64, modelDir string, galleryFiles []*multipart.FileHeader) ([]string, error) {
+func saveGalleryUploads(modelID string, modelDir string, galleryFiles []*multipart.FileHeader) ([]string, error) {
 	savedGallery := make([]string, 0, len(galleryFiles))
 	for index, header := range galleryFiles {
 		baseName := fmt.Sprintf("gallery_%02d", index+1)
@@ -307,7 +315,7 @@ func ensureImageURLFromGallery(imageURL *string, gallery []string) {
 	}
 }
 
-func updateModelImagesTx(tx *sql.Tx, modelID int64, imageURL string, gallery []string, updatedAt string) error {
+func updateModelImagesTx(tx *sql.Tx, modelID string, imageURL string, gallery []string, updatedAt string) error {
 	galleryJSON, err := marshalStringSlice(gallery)
 	if err != nil {
 		return fmt.Errorf("marshal uploaded gallery: %w", err)
@@ -323,7 +331,7 @@ func updateModelImagesTx(tx *sql.Tx, modelID int64, imageURL string, gallery []s
 	return nil
 }
 
-func buildModelResponse(id int64, req models.CreateModelRequest, state modelWriteState, createdAt time.Time) models.CarModel {
+func buildModelResponse(id string, req models.CreateModelRequest, state modelWriteState, createdAt time.Time) models.CarModel {
 	return models.CarModel{
 		ID:        id,
 		Name:      req.Name,
@@ -344,36 +352,42 @@ func buildModelResponse(id int64, req models.CreateModelRequest, state modelWrit
 	}
 }
 
-func modelImageDir(imagesRoot string, modelID int64) string {
-	return filepath.Join(imagesRoot, strconv.FormatInt(modelID, 10))
+func modelImageDir(imagesRoot string, modelID string) string {
+	return filepath.Join(imagesRoot, modelID)
 }
 
-func (s *ModelStore) cleanupCreatedModelDir(modelID int64, shouldCleanup bool) {
+func (s *ModelStore) cleanupCreatedModelDir(modelID string, shouldCleanup bool) {
 	if !shouldCleanup {
 		return
 	}
 	_ = os.RemoveAll(modelImageDir(s.imagesRoot, modelID))
 }
 
-func (s *ModelStore) update(id int64, req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
-	preparedReq, state, createdAt, err := s.prepareModelUpdateState(id, req)
+func (s *ModelStore) update(id string, req models.CreateModelRequest, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader) (models.CarModel, error) {
+	normalizedID, err := normalizeModelID(id)
+	if err != nil {
+		return models.CarModel{}, errors.New("invalid model id")
+	}
+
+	preparedReq, state, createdAt, err := s.prepareModelUpdateState(normalizedID, req)
 	if err != nil {
 		return models.CarModel{}, err
 	}
 
-	if err := s.applyUpdateUploads(id, coverFile, galleryFiles, &state); err != nil {
+	if err := s.applyUpdateUploads(normalizedID, coverFile, galleryFiles, &state); err != nil {
 		return models.CarModel{}, err
 	}
 
-	if err := s.persistModelUpdate(id, preparedReq, state); err != nil {
+	if err := s.persistModelUpdate(normalizedID, preparedReq, state); err != nil {
 		return models.CarModel{}, err
 	}
 
-	return buildModelResponse(id, preparedReq, state, createdAt), nil
+	return buildModelResponse(normalizedID, preparedReq, state, createdAt), nil
 }
 
-func (s *ModelStore) prepareModelUpdateState(id int64, req models.CreateModelRequest) (models.CreateModelRequest, modelWriteState, time.Time, error) {
-	if id <= 0 {
+func (s *ModelStore) prepareModelUpdateState(id string, req models.CreateModelRequest) (models.CreateModelRequest, modelWriteState, time.Time, error) {
+	id, err := normalizeModelID(id)
+	if err != nil {
 		return models.CreateModelRequest{}, modelWriteState{}, time.Time{}, errors.New("invalid model id")
 	}
 
@@ -405,7 +419,7 @@ func (s *ModelStore) prepareModelUpdateState(id int64, req models.CreateModelReq
 	return req, state, existing.CreatedAt, nil
 }
 
-func (s *ModelStore) applyUpdateUploads(id int64, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader, state *modelWriteState) error {
+func (s *ModelStore) applyUpdateUploads(id string, coverFile *multipart.FileHeader, galleryFiles []*multipart.FileHeader, state *modelWriteState) error {
 	if coverFile == nil && len(galleryFiles) == 0 {
 		return nil
 	}
@@ -424,7 +438,7 @@ func (s *ModelStore) applyUpdateUploads(id int64, coverFile *multipart.FileHeade
 	return nil
 }
 
-func replaceCoverUpload(modelID int64, modelDir string, coverFile *multipart.FileHeader, imageURL *string) error {
+func replaceCoverUpload(modelID string, modelDir string, coverFile *multipart.FileHeader, imageURL *string) error {
 	if coverFile == nil {
 		return nil
 	}
@@ -438,7 +452,7 @@ func replaceCoverUpload(modelID int64, modelDir string, coverFile *multipart.Fil
 	return nil
 }
 
-func replaceGalleryUpload(modelID int64, modelDir string, galleryFiles []*multipart.FileHeader, gallery *[]string, imageURL *string) error {
+func replaceGalleryUpload(modelID string, modelDir string, galleryFiles []*multipart.FileHeader, gallery *[]string, imageURL *string) error {
 	if len(galleryFiles) == 0 {
 		return nil
 	}
@@ -453,7 +467,7 @@ func replaceGalleryUpload(modelID int64, modelDir string, galleryFiles []*multip
 	return nil
 }
 
-func (s *ModelStore) persistModelUpdate(id int64, req models.CreateModelRequest, state modelWriteState) error {
+func (s *ModelStore) persistModelUpdate(id string, req models.CreateModelRequest, state modelWriteState) error {
 	galleryJSON, err := marshalStringSlice(state.gallery)
 	if err != nil {
 		return fmt.Errorf("marshal gallery: %w", err)
@@ -484,7 +498,7 @@ func (s *ModelStore) persistModelUpdate(id int64, req models.CreateModelRequest,
 	return nil
 }
 
-func (s *ModelStore) getByID(id int64) (models.CarModel, error) {
+func (s *ModelStore) getByID(id string) (models.CarModel, error) {
 	row := s.db.QueryRow(`
 		SELECT id, name, model_code, brand, series, scale, year, color, material, condition,
 		       image_url, gallery_json, notes, tags_json, created_at, updated_at
@@ -504,30 +518,20 @@ func (s *ModelStore) getByID(id int64) (models.CarModel, error) {
 }
 
 func (s *ModelStore) initSchema() error {
-	const schema = `
-	CREATE TABLE IF NOT EXISTS car_models (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL,
-		model_code TEXT NOT NULL DEFAULT '',
-		brand TEXT NOT NULL DEFAULT '',
-		series TEXT NOT NULL DEFAULT '',
-		scale TEXT NOT NULL DEFAULT '',
-		year INTEGER NOT NULL DEFAULT 0,
-		color TEXT NOT NULL DEFAULT '',
-		material TEXT NOT NULL DEFAULT '',
-		condition TEXT NOT NULL DEFAULT '',
-		image_url TEXT NOT NULL DEFAULT '',
-		gallery_json TEXT NOT NULL DEFAULT '[]',
-		notes TEXT NOT NULL DEFAULT '',
-		tags_json TEXT NOT NULL DEFAULT '[]',
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL
-	);
-	`
-
-	if _, err := s.db.Exec(schema); err != nil {
+	if _, err := s.db.Exec(createCarModelsTableSQL("car_models")); err != nil {
 		return fmt.Errorf("init sqlite schema: %w", err)
 	}
+
+	idColumnType, err := s.getModelIDColumnType()
+	if err != nil {
+		return err
+	}
+	if strings.Contains(strings.ToUpper(idColumnType), "INT") {
+		if err := s.migrateNumericIDsToUUID(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -592,42 +596,39 @@ func (s *ModelStore) loadLegacySeedData() ([]byte, bool, error) {
 }
 
 func parseLegacySeedModels(data []byte, sourcePath string) ([]models.CarModel, bool) {
-	var legacyItems []models.CarModel
-	if err := json.Unmarshal(data, &legacyItems); err != nil {
+	var rawItems []map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawItems); err != nil {
 		log.Printf("[data] skip legacy import from %s due to parse error: %v", sourcePath, err)
 		return nil, false
 	}
-	if len(legacyItems) == 0 {
+	if len(rawItems) == 0 {
 		return nil, false
 	}
+
+	legacyItems := make([]models.CarModel, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		idJSON, err := json.Marshal(parseLegacyRawID(rawItem["id"]))
+		if err != nil {
+			log.Printf("[data] skip legacy import from %s due to id conversion error: %v", sourcePath, err)
+			return nil, false
+		}
+		rawItem["id"] = idJSON
+
+		itemJSON, err := json.Marshal(rawItem)
+		if err != nil {
+			log.Printf("[data] skip legacy import from %s due to conversion error: %v", sourcePath, err)
+			return nil, false
+		}
+
+		var item models.CarModel
+		if err := json.Unmarshal(itemJSON, &item); err != nil {
+			log.Printf("[data] skip legacy import from %s due to parse error: %v", sourcePath, err)
+			return nil, false
+		}
+		legacyItems = append(legacyItems, item)
+	}
+
 	return legacyItems, true
-}
-
-type legacyImportState struct {
-	nextID  int64
-	usedIDs map[int64]struct{}
-}
-
-func newLegacyImportState(size int) legacyImportState {
-	return legacyImportState{
-		nextID:  1,
-		usedIDs: make(map[int64]struct{}, size),
-	}
-}
-
-func (s *legacyImportState) allocateID(candidate int64) int64 {
-	id := candidate
-	if id <= 0 {
-		id = s.nextID
-	}
-	if _, exists := s.usedIDs[id]; exists {
-		id = s.nextID
-	}
-	s.usedIDs[id] = struct{}{}
-	if id >= s.nextID {
-		s.nextID = id + 1
-	}
-	return id
 }
 
 func (s *ModelStore) importLegacyModels(legacyItems []models.CarModel) error {
@@ -636,10 +637,10 @@ func (s *ModelStore) importLegacyModels(legacyItems []models.CarModel) error {
 		return fmt.Errorf("begin legacy import transaction: %w", err)
 	}
 
-	state := newLegacyImportState(len(legacyItems))
+	usedIDs := make(map[string]struct{}, len(legacyItems))
 	for _, raw := range legacyItems {
 		item := normalizeLegacyItem(raw)
-		item.ID = state.allocateID(item.ID)
+		item.ID = allocateLegacyID(item.ID, usedIDs)
 
 		if err := insertLegacyModelTx(tx, item); err != nil {
 			_ = tx.Rollback()
@@ -671,12 +672,14 @@ func insertLegacyModelTx(tx *sql.Tx, item models.CarModel) error {
 	`, item.ID, item.Name, item.ModelCode, item.Brand, item.Series, item.Scale, item.Year, item.Color,
 		item.Material, item.Condition, item.ImageURL, galleryJSON, item.Notes, tagsJSON,
 		item.CreatedAt.Format(time.RFC3339Nano), item.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
-		return fmt.Errorf("insert legacy model %d: %w", item.ID, err)
+		return fmt.Errorf("insert legacy model %s: %w", item.ID, err)
 	}
 	return nil
 }
+
 func normalizeLegacyItem(item models.CarModel) models.CarModel {
 	now := time.Now().UTC()
+	item.ID = strings.TrimSpace(item.ID)
 	item.Name = strings.TrimSpace(item.Name)
 	item.ModelCode = strings.TrimSpace(item.ModelCode)
 	item.Brand = strings.TrimSpace(item.Brand)
@@ -909,8 +912,8 @@ func isAllowedImageExtension(ext string) bool {
 	}
 }
 
-func buildUploadPath(modelID int64, fileName string) string {
-	return path.Join("/uploads", strconv.FormatInt(modelID, 10), fileName)
+func buildUploadPath(modelID string, fileName string) string {
+	return path.Join("/uploads", modelID, fileName)
 }
 
 func deleteFilesByPrefix(dir, prefix string) error {
@@ -937,4 +940,281 @@ func deleteFilesByPrefix(dir, prefix string) error {
 	}
 
 	return nil
+}
+
+func createCarModelsTableSQL(tableName string) string {
+	return fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		model_code TEXT NOT NULL DEFAULT '',
+		brand TEXT NOT NULL DEFAULT '',
+		series TEXT NOT NULL DEFAULT '',
+		scale TEXT NOT NULL DEFAULT '',
+		year INTEGER NOT NULL DEFAULT 0,
+		color TEXT NOT NULL DEFAULT '',
+		material TEXT NOT NULL DEFAULT '',
+		condition TEXT NOT NULL DEFAULT '',
+		image_url TEXT NOT NULL DEFAULT '',
+		gallery_json TEXT NOT NULL DEFAULT '[]',
+		notes TEXT NOT NULL DEFAULT '',
+		tags_json TEXT NOT NULL DEFAULT '[]',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);`, tableName)
+}
+
+func (s *ModelStore) getModelIDColumnType() (string, error) {
+	rows, err := s.db.Query(`PRAGMA table_info(car_models)`)
+	if err != nil {
+		return "", fmt.Errorf("inspect sqlite schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid          int
+			name         string
+			columnType   string
+			notNull      int
+			defaultValue sql.NullString
+			primaryKey   int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return "", fmt.Errorf("read sqlite schema: %w", err)
+		}
+		if strings.EqualFold(strings.TrimSpace(name), "id") {
+			return strings.TrimSpace(columnType), nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("iterate sqlite schema: %w", err)
+	}
+	return "", fmt.Errorf("car_models.id column is missing")
+}
+
+func (s *ModelStore) migrateNumericIDsToUUID() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin id migration transaction: %w", err)
+	}
+
+	const migrationTable = "car_models_uuid_migration"
+	if _, err := tx.Exec(`DROP TABLE IF EXISTS ` + migrationTable); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("drop migration table: %w", err)
+	}
+	if _, err := tx.Exec(createCarModelsTableSQL(migrationTable)); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("create migration table: %w", err)
+	}
+
+	rows, err := tx.Query(`
+		SELECT id, name, model_code, brand, series, scale, year, color, material, condition,
+		       image_url, gallery_json, notes, tags_json, created_at, updated_at
+		FROM car_models
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("query legacy models for id migration: %w", err)
+	}
+
+	insertStmt, err := tx.Prepare(`
+		INSERT INTO car_models_uuid_migration(
+			id, name, model_code, brand, series, scale, year, color, material, condition,
+			image_url, gallery_json, notes, tags_json, created_at, updated_at
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		rows.Close()
+		_ = tx.Rollback()
+		return fmt.Errorf("prepare id migration insert: %w", err)
+	}
+
+	migratedCount := 0
+	for rows.Next() {
+		var (
+			legacyID    int64
+			name        string
+			modelCode   string
+			brand       string
+			series      string
+			scale       string
+			year        int
+			color       string
+			material    string
+			condition   string
+			imageURL    string
+			galleryJSON string
+			notes       string
+			tagsJSON    string
+			createdAt   string
+			updatedAt   string
+		)
+		if err := rows.Scan(
+			&legacyID,
+			&name,
+			&modelCode,
+			&brand,
+			&series,
+			&scale,
+			&year,
+			&color,
+			&material,
+			&condition,
+			&imageURL,
+			&galleryJSON,
+			&notes,
+			&tagsJSON,
+			&createdAt,
+			&updatedAt,
+		); err != nil {
+			insertStmt.Close()
+			rows.Close()
+			_ = tx.Rollback()
+			return fmt.Errorf("scan id migration row: %w", err)
+		}
+
+		newID := uuid.NewString()
+		if _, err := insertStmt.Exec(
+			newID,
+			name,
+			modelCode,
+			brand,
+			series,
+			scale,
+			year,
+			color,
+			material,
+			condition,
+			imageURL,
+			galleryJSON,
+			notes,
+			tagsJSON,
+			createdAt,
+			updatedAt,
+		); err != nil {
+			insertStmt.Close()
+			rows.Close()
+			_ = tx.Rollback()
+			return fmt.Errorf("insert migrated model (legacy id=%d): %w", legacyID, err)
+		}
+		migratedCount++
+	}
+	if err := rows.Err(); err != nil {
+		insertStmt.Close()
+		rows.Close()
+		_ = tx.Rollback()
+		return fmt.Errorf("iterate id migration rows: %w", err)
+	}
+
+	if err := insertStmt.Close(); err != nil {
+		rows.Close()
+		_ = tx.Rollback()
+		return fmt.Errorf("close id migration statement: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("close id migration rows: %w", err)
+	}
+
+	if _, err := tx.Exec(`DROP TABLE car_models`); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("drop legacy car_models table: %w", err)
+	}
+	if _, err := tx.Exec(`ALTER TABLE ` + migrationTable + ` RENAME TO car_models`); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("rename migrated car_models table: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit id migration transaction: %w", err)
+	}
+
+	log.Printf("[data] migrated car_models ids from integer to UUID (%d rows)", migratedCount)
+	return nil
+}
+
+func parseLegacyRawID(rawID json.RawMessage) string {
+	trimmed := strings.TrimSpace(string(rawID))
+	if trimmed == "" || trimmed == "null" {
+		return ""
+	}
+
+	var parsedString string
+	if err := json.Unmarshal(rawID, &parsedString); err == nil {
+		return strings.TrimSpace(parsedString)
+	}
+
+	var parsedInt int64
+	if err := json.Unmarshal(rawID, &parsedInt); err == nil && parsedInt > 0 {
+		return strconv.FormatInt(parsedInt, 10)
+	}
+
+	return ""
+}
+
+func allocateLegacyID(candidate string, usedIDs map[string]struct{}) string {
+	id := strings.TrimSpace(candidate)
+	if _, err := uuid.Parse(id); err != nil {
+		id = ""
+	}
+	if id == "" {
+		id = uuid.NewString()
+	}
+
+	for {
+		if _, exists := usedIDs[id]; !exists {
+			usedIDs[id] = struct{}{}
+			return id
+		}
+		id = uuid.NewString()
+	}
+}
+
+func normalizeModelID(rawID string) (string, error) {
+	id := strings.TrimSpace(rawID)
+	if id == "" {
+		return "", errors.New("model id is required")
+	}
+	if _, err := uuid.Parse(id); err != nil {
+		return "", errors.New("invalid model id")
+	}
+	return id, nil
+}
+
+func collectImageDirsForModel(imagesRoot string, item models.CarModel, fallbackModelID string) []string {
+	uniqueDirs := make(map[string]struct{})
+	addDir := func(modelID string) {
+		trimmedID := strings.TrimSpace(modelID)
+		if trimmedID == "" {
+			return
+		}
+		uniqueDirs[modelImageDir(imagesRoot, trimmedID)] = struct{}{}
+	}
+
+	addDir(item.ID)
+	addDir(fallbackModelID)
+	addDir(modelIDFromUploadPath(item.ImageURL))
+	for _, imageURL := range item.Gallery {
+		addDir(modelIDFromUploadPath(imageURL))
+	}
+
+	dirs := make([]string, 0, len(uniqueDirs))
+	for dir := range uniqueDirs {
+		dirs = append(dirs, dir)
+	}
+	return dirs
+}
+
+func modelIDFromUploadPath(rawURL string) string {
+	parsedPath := path.Clean(strings.TrimSpace(rawURL))
+	if !strings.HasPrefix(parsedPath, "/uploads/") {
+		return ""
+	}
+
+	parts := strings.Split(strings.TrimPrefix(parsedPath, "/uploads/"), "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(parts[0])
 }

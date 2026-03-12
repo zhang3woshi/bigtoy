@@ -20,6 +20,9 @@ function jsonResponse(payload, status = 200) {
 }
 
 describe("api client", () => {
+  const modelID = "4f2f38b2-292d-4da1-b90d-adf346910280";
+  const nextModelID = "6f0a6808-4e20-4ed0-89eb-a50db02de818";
+
   beforeEach(() => {
     globalThis.fetch = vi.fn();
   });
@@ -29,11 +32,11 @@ describe("api client", () => {
   });
 
   it("fetches model list from backend", async () => {
-    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: [{ id: 1, name: "R34" }] }));
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: [{ id: modelID, name: "R34" }] }));
 
     const result = await fetchModels();
 
-    expect(result).toEqual([{ id: 1, name: "R34" }]);
+    expect(result).toEqual([{ id: modelID, name: "R34" }]);
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/models$/),
       expect.objectContaining({
@@ -65,12 +68,12 @@ describe("api client", () => {
   });
 
   it("creates model with JSON payload", async () => {
-    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { id: 2 } }, 201));
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { id: modelID } }, 201));
 
     const payload = { name: "Supra", year: 2001 };
     const result = await createModel(payload);
 
-    expect(result).toEqual({ id: 2 });
+    expect(result).toEqual({ id: modelID });
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/models$/),
       expect.objectContaining({
@@ -85,7 +88,7 @@ describe("api client", () => {
   });
 
   it("creates model with FormData payload", async () => {
-    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { id: 3 } }, 201));
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { id: modelID } }, 201));
 
     const formData = new FormData();
     formData.append("name", "Skyline");
@@ -107,11 +110,11 @@ describe("api client", () => {
   });
 
   it("updates model for valid model id", async () => {
-    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { id: 7, name: "Updated" } }));
-    const result = await updateModel("7", { name: "Updated" });
-    expect(result).toEqual({ id: 7, name: "Updated" });
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { id: modelID, name: "Updated" } }));
+    const result = await updateModel(modelID, { name: "Updated" });
+    expect(result).toEqual({ id: modelID, name: "Updated" });
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/models\/7$/),
+      expect.stringMatching(new RegExp(`/api/models/${modelID}$`)),
       expect.objectContaining({
         method: "PUT",
       }),
@@ -125,9 +128,9 @@ describe("api client", () => {
 
   it("deletes model with valid id", async () => {
     globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { deleted: true } }));
-    await expect(deleteModel("11")).resolves.toEqual({ deleted: true });
+    await expect(deleteModel(nextModelID)).resolves.toEqual({ deleted: true });
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/models\/11$/),
+      expect.stringMatching(new RegExp(`/api/models/${nextModelID}$`)),
       expect.objectContaining({
         method: "DELETE",
       }),

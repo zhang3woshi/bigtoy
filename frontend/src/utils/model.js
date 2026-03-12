@@ -53,7 +53,7 @@ export function sortByLatest(items) {
     if (aTime !== bTime) {
       return bTime - aTime;
     }
-    return Number(b.id || 0) - Number(a.id || 0);
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
   });
 }
 
@@ -75,7 +75,7 @@ export function findLatestModel(items) {
     if (currentTime < latestTime) {
       return latest;
     }
-    return Number(current.id || 0) > Number(latest.id || 0) ? current : latest;
+    return String(current?.id || "").localeCompare(String(latest?.id || "")) > 0 ? current : latest;
   }, null);
 }
 

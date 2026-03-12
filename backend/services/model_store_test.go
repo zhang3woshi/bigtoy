@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"bigtoy/backend/models"
+
+	"github.com/google/uuid"
 )
 
 func newModelStoreForTest(t *testing.T, legacyPath string) *ModelStore {
@@ -92,8 +94,8 @@ func TestModelStoreCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add model: %v", err)
 	}
-	if created.ID <= 0 {
-		t.Fatalf("expected positive id, got %d", created.ID)
+	if _, err := uuid.Parse(created.ID); err != nil {
+		t.Fatalf("expected uuid id, got %q", created.ID)
 	}
 	if created.Name != "Skyline GT-R" {
 		t.Fatalf("name should be normalized, got %q", created.Name)
@@ -137,14 +139,14 @@ func TestModelStoreLegacySeedImport(t *testing.T) {
 
 	payload := []models.CarModel{
 		{
-			ID:      1,
+			ID:      "1",
 			Name:    "  Legacy One ",
 			Year:    -1,
 			Tags:    []string{" old ", ""},
 			Gallery: []string{" /uploads/1/a.png ", "/uploads/1/a.png"},
 		},
 		{
-			ID:   1,
+			ID:   "1",
 			Name: "Legacy Two",
 		},
 	}
@@ -164,7 +166,7 @@ func TestModelStoreLegacySeedImport(t *testing.T) {
 	}
 
 	if items[0].ID == items[1].ID {
-		t.Fatalf("expected unique IDs after import, got duplicates: %d", items[0].ID)
+		t.Fatalf("expected unique IDs after import, got duplicates: %s", items[0].ID)
 	}
 	if items[0].Year != 0 {
 		t.Fatalf("expected normalized year 0 for negative legacy year, got %d", items[0].Year)
@@ -212,7 +214,7 @@ func TestModelStoreUtilityFunctions(t *testing.T) {
 	if parsed := parseTimeOrZero("not-a-time"); !parsed.IsZero() {
 		t.Fatalf("expected zero time for invalid input, got %v", parsed)
 	}
-	if path := buildUploadPath(42, "cover.png"); path != "/uploads/42/cover.png" {
+	if path := buildUploadPath("42", "cover.png"); path != "/uploads/42/cover.png" {
 		t.Fatalf("unexpected upload path: %s", path)
 	}
 
@@ -270,7 +272,7 @@ func TestSaveUploadedImageAndUploadReplacement(t *testing.T) {
 	}
 
 	imageURL := ""
-	if err := applyCoverUpload(7, modelDir, coverHeader, &imageURL); err != nil {
+	if err := applyCoverUpload("7", modelDir, coverHeader, &imageURL); err != nil {
 		t.Fatalf("apply cover upload: %v", err)
 	}
 	if !strings.HasPrefix(imageURL, "/uploads/7/cover") {
@@ -281,7 +283,7 @@ func TestSaveUploadedImageAndUploadReplacement(t *testing.T) {
 		makeUploadHeader(t, "galleryFiles", "a.png", "image/png", pngBytes),
 		makeUploadHeader(t, "galleryFiles", "b.png", "image/png", pngBytes),
 	}
-	gallery, err := saveGalleryUploads(7, modelDir, galleryHeaders)
+	gallery, err := saveGalleryUploads("7", modelDir, galleryHeaders)
 	if err != nil {
 		t.Fatalf("save gallery uploads: %v", err)
 	}
@@ -290,14 +292,14 @@ func TestSaveUploadedImageAndUploadReplacement(t *testing.T) {
 	}
 
 	updatedGallery := []string{}
-	if err := replaceGalleryUpload(7, modelDir, galleryHeaders[:1], &updatedGallery, &imageURL); err != nil {
+	if err := replaceGalleryUpload("7", modelDir, galleryHeaders[:1], &updatedGallery, &imageURL); err != nil {
 		t.Fatalf("replace gallery upload: %v", err)
 	}
 	if len(updatedGallery) != 1 {
 		t.Fatalf("expected replaced gallery size 1, got %d", len(updatedGallery))
 	}
 
-	if err := replaceCoverUpload(7, modelDir, coverHeader, &imageURL); err != nil {
+	if err := replaceCoverUpload("7", modelDir, coverHeader, &imageURL); err != nil {
 		t.Fatalf("replace cover upload: %v", err)
 	}
 }
@@ -323,7 +325,7 @@ func TestModelStoreAddAndUpdateWithUploads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add with uploads: %v", err)
 	}
-	if created.ID <= 0 || created.ImageURL == "" || len(created.Gallery) != 2 {
+	if _, err := uuid.Parse(created.ID); err != nil || created.ImageURL == "" || len(created.Gallery) != 2 {
 		t.Fatalf("unexpected created model with uploads: %#v", created)
 	}
 
@@ -361,7 +363,7 @@ func TestModelStoreAddAndUpdateWithUploads(t *testing.T) {
 		t.Fatalf("expected old gallery files to be cleaned up, got %#v", names)
 	}
 
-	if _, err := store.UpdateWithUploads(9999, models.CreateModelRequest{Name: "Missing"}, cover, nil); err == nil || !errorsIs(err, ErrModelNotFound) {
+	if _, err := store.UpdateWithUploads(uuid.NewString(), models.CreateModelRequest{Name: "Missing"}, cover, nil); err == nil || !errorsIs(err, ErrModelNotFound) {
 		t.Fatalf("expected ErrModelNotFound for missing update id, got: %v", err)
 	}
 }
@@ -370,7 +372,7 @@ func TestCleanupCreatedModelDir(t *testing.T) {
 	root := t.TempDir()
 	store := &ModelStore{imagesRoot: root}
 
-	modelDir := modelImageDir(root, 42)
+	modelDir := modelImageDir(root, "42")
 	if err := os.MkdirAll(modelDir, 0o755); err != nil {
 		t.Fatalf("create model dir: %v", err)
 	}
@@ -378,12 +380,12 @@ func TestCleanupCreatedModelDir(t *testing.T) {
 		t.Fatalf("write model image: %v", err)
 	}
 
-	store.cleanupCreatedModelDir(42, false)
+	store.cleanupCreatedModelDir("42", false)
 	if _, err := os.Stat(modelDir); err != nil {
 		t.Fatalf("expected directory to remain when cleanup disabled: %v", err)
 	}
 
-	store.cleanupCreatedModelDir(42, true)
+	store.cleanupCreatedModelDir("42", true)
 	if _, err := os.Stat(modelDir); !os.IsNotExist(err) {
 		t.Fatalf("expected model dir to be removed, got err=%v", err)
 	}
@@ -426,12 +428,12 @@ func TestLegacyParsingHelpers(t *testing.T) {
 		t.Fatalf("expected parsed legacy item, got ok=%v len=%d", ok, len(items))
 	}
 
-	state := newLegacyImportState(2)
-	id1 := state.allocateID(10)
-	id2 := state.allocateID(10)
-	id3 := state.allocateID(0)
-	if id1 != 10 || id2 == 10 || id3 <= 0 {
-		t.Fatalf("unexpected allocated ids: %d, %d, %d", id1, id2, id3)
+	usedIDs := map[string]struct{}{}
+	id1 := allocateLegacyID("f2c85ef8-4d34-4e9a-ae08-2f61828935d8", usedIDs)
+	id2 := allocateLegacyID("f2c85ef8-4d34-4e9a-ae08-2f61828935d8", usedIDs)
+	id3 := allocateLegacyID("", usedIDs)
+	if id1 == id2 || id1 == "" || id2 == "" || id3 == "" {
+		t.Fatalf("unexpected allocated ids: %s, %s, %s", id1, id2, id3)
 	}
 }
 
@@ -586,7 +588,7 @@ func TestModelStoreListAndPersistEdgeCases(t *testing.T) {
 		gallery:  []string{"/uploads/9/a.png"},
 		tags:     []string{"tag"},
 	}
-	err = store.persistModelUpdate(99999, models.CreateModelRequest{
+	err = store.persistModelUpdate(uuid.NewString(), models.CreateModelRequest{
 		Name: "No Model",
 		Year: 2021,
 	}, state)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/beego/beego/v2/server/web/context"
+	"github.com/google/uuid"
 
 	"bigtoy/backend/services"
 )
@@ -161,9 +162,12 @@ func TestModelControllerCRUDFlow(t *testing.T) {
 
 	createdPayload := decodeJSONBody(t, createRecorder)
 	created := createdPayload["data"].(map[string]any)
-	modelID := int64(created["id"].(float64))
-	if modelID <= 0 {
-		t.Fatalf("invalid created model id: %d", modelID)
+	modelID, ok := created["id"].(string)
+	if !ok {
+		t.Fatalf("invalid created model id type: %#v", created["id"])
+	}
+	if _, err := uuid.Parse(modelID); err != nil {
+		t.Fatalf("invalid created model id value: %q", modelID)
 	}
 
 	getCtx, getRecorder := newControllerContext(http.MethodGet, "/api/models", nil, "")
@@ -185,9 +189,9 @@ func TestModelControllerCRUDFlow(t *testing.T) {
 	}
 
 	updateBody := []byte(`{"name":"Model B","brand":"Brand B","year":2021}`)
-	putCtx, putRecorder := newControllerContext(http.MethodPut, "/api/models/1", updateBody, "application/json")
+	putCtx, putRecorder := newControllerContext(http.MethodPut, "/api/models/"+modelID, updateBody, "application/json")
 	putCtx.Request.AddCookie(&http.Cookie{Name: cookieName, Value: token})
-	putCtx.Input.SetParam(":id", "1")
+	putCtx.Input.SetParam(":id", modelID)
 	putController := &ModelController{}
 	putController.Init(putCtx, "ModelController", "Put", nil)
 	putController.Put()
@@ -195,9 +199,9 @@ func TestModelControllerCRUDFlow(t *testing.T) {
 		t.Fatalf("expected 200 for update, got %d body=%s", putRecorder.Code, putRecorder.Body.String())
 	}
 
-	deleteCtx, deleteRecorder := newControllerContext(http.MethodDelete, "/api/models/1", nil, "")
+	deleteCtx, deleteRecorder := newControllerContext(http.MethodDelete, "/api/models/"+modelID, nil, "")
 	deleteCtx.Request.AddCookie(&http.Cookie{Name: cookieName, Value: token})
-	deleteCtx.Input.SetParam(":id", "1")
+	deleteCtx.Input.SetParam(":id", modelID)
 	deleteController := &ModelController{}
 	deleteController.Init(deleteCtx, "ModelController", "Delete", nil)
 	deleteController.Delete()
@@ -205,9 +209,10 @@ func TestModelControllerCRUDFlow(t *testing.T) {
 		t.Fatalf("expected 200 for delete, got %d body=%s", deleteRecorder.Code, deleteRecorder.Body.String())
 	}
 
-	deleteMissingCtx, deleteMissingRecorder := newControllerContext(http.MethodDelete, "/api/models/999", nil, "")
+	missingID := uuid.NewString()
+	deleteMissingCtx, deleteMissingRecorder := newControllerContext(http.MethodDelete, "/api/models/"+missingID, nil, "")
 	deleteMissingCtx.Request.AddCookie(&http.Cookie{Name: cookieName, Value: token})
-	deleteMissingCtx.Input.SetParam(":id", "999")
+	deleteMissingCtx.Input.SetParam(":id", missingID)
 	deleteMissingController := &ModelController{}
 	deleteMissingController.Init(deleteMissingCtx, "ModelController", "Delete", nil)
 	deleteMissingController.Delete()

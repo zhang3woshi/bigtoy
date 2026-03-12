@@ -16,10 +16,6 @@
     </div>
     <div class="topbar-actions">
       <a class="nav-link hero-entry-link" href="/login.html">模型录入</a>
-      <div class="hero-stat topbar-stat">
-        <span>{{ totalCount }}</span>
-        <small>收藏总数</small>
-      </div>
     </div>
   </header>
 
@@ -27,13 +23,6 @@
     <section class="hero">
       <div class="hero-left">
         <div class="hero-content">
-          <section class="hero-panel hero-copy-panel" aria-label="页面介绍">
-            <div class="hero-copy">
-              <h2>把你的火柴盒与风火轮收藏做成在线车模库</h2>
-              <p>按品牌、系列、年份快速浏览，把收藏内容清晰展示在一个页面里。</p>
-            </div>
-          </section>
-
           <section class="hero-panel hero-search-panel" aria-label="搜索筛选">
             <div class="filters">
               <input
@@ -54,6 +43,10 @@
           <section class="hero-board hero-panel hero-board-panel" aria-label="收藏看板">
             <p class="hero-board-title">收藏看板</p>
             <div class="hero-board-grid">
+              <article class="hero-board-item hero-board-item-wide hero-board-item-total">
+                <small>收藏总数</small>
+                <strong>{{ totalCount }}</strong>
+              </article>
               <article class="hero-board-item">
                 <small>品牌数</small>
                 <strong>{{ brandCount }}</strong>
@@ -216,14 +209,20 @@ function closeDetailModal() {
 }
 
 function openDetailModal(modelID) {
-  const item = allModels.value.find((entry) => Number(entry.id) === Number(modelID)) || null;
+  const normalizedID = String(modelID || "").trim();
+  if (!normalizedID) {
+    activeDetailItem.value = null;
+    detailVisible.value = true;
+    return;
+  }
+  const item = allModels.value.find((entry) => String(entry?.id || "").trim() === normalizedID) || null;
   activeDetailItem.value = item;
   detailVisible.value = true;
 }
 
 function handleRandomOpen() {
-  const modelID = Number(randomCurrent.value?.id);
-  if (!Number.isInteger(modelID) || modelID <= 0) {
+  const modelID = String(randomCurrent.value?.id || "").trim();
+  if (!modelID) {
     return;
   }
   openDetailModal(modelID);
@@ -258,3 +257,4 @@ onUnmounted(() => {
   stopRandomShowcase();
 });
 </script>
+

@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/beego/beego/v2 v2.3.8
+	github.com/google/uuid v1.6.0
 	github.com/kardianos/service v1.2.2
 	golang.org/x/crypto v0.24.0
 	modernc.org/sqlite v1.39.1
@@ -13,7 +14,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

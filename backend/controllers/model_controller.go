@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/beego/beego/v2/server/web"
+	"github.com/google/uuid"
 
 	"bigtoy/backend/models"
 	"bigtoy/backend/services"
@@ -298,16 +299,15 @@ func validFiles(files []*multipart.FileHeader) []*multipart.FileHeader {
 	return result
 }
 
-func parseModelID(c *ModelController) (int64, error) {
+func parseModelID(c *ModelController) (string, error) {
 	rawID := strings.TrimSpace(c.Ctx.Input.Param(":id"))
 	if rawID == "" {
-		return 0, fmt.Errorf("model id is required")
+		return "", fmt.Errorf("model id is required")
 	}
 
-	modelID, err := strconv.ParseInt(rawID, 10, 64)
-	if err != nil || modelID <= 0 {
-		return 0, fmt.Errorf("invalid model id")
+	if _, err := uuid.Parse(rawID); err != nil {
+		return "", fmt.Errorf("invalid model id")
 	}
 
-	return modelID, nil
+	return rawID, nil
 }
