@@ -1041,6 +1041,25 @@ body.page-public {
   flex-shrink: 0;
 }
 
+.recent-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.recent-pagination-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.recent-pagination-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .btn-inline {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
@@ -1267,6 +1286,11 @@ body.page-public {
   .recent-actions {
     width: 100%;
     padding-left: 78px;
+  }
+
+  .recent-pagination {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .detail-main {

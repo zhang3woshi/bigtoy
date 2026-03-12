@@ -5,7 +5,7 @@ BigToy is a die-cast model gallery + admin backend.
 ## Stack
 
 - Backend: Go + Beego v2
-- Frontend: Vite (Vanilla JS)
+- Frontend: Vite + Vue 3
 - Database: SQLite (`backend/data/models.db`)
 - Images: `backend/data/images/<model-id>/`
 
