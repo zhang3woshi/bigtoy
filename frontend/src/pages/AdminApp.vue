@@ -1,12 +1,13 @@
 <template>
   <header class="topbar">
     <div class="brand-block">
-      <p class="brand-kicker">Collection Management</p>
-      <h1 class="brand-title">车型录入后台</h1>
+      <p class="brand-kicker">Zhangyu Diecast Collection</p>
+      <h1 class="brand-title">模型录入后台</h1>
     </div>
-    <div class="topbar-actions">
-      <a class="nav-link" href="/index.html">返回展示页</a>
-      <button type="button" class="btn-secondary" :disabled="logoutPending" @click="handleLogout">
+    <div class="topbar-nav">
+      <a class="nav-link" href="/index.html">展厅首页</a>
+      <a class="nav-link" href="/model.html">详情页</a>
+      <button type="button" class="btn-secondary nav-btn" :disabled="logoutPending" @click="handleLogout">
         退出登录
       </button>
     </div>

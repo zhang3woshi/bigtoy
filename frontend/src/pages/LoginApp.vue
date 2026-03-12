@@ -1,24 +1,27 @@
 <template>
   <header class="topbar">
     <div class="brand-block">
-      <p class="brand-kicker">Secure Access</p>
-      <h1 class="brand-title">Admin Authentication</h1>
+      <p class="brand-kicker">Zhangyu Diecast Collection</p>
+      <h1 class="brand-title">管理后台登录</h1>
     </div>
-    <a class="nav-link" href="/index.html">Back to Gallery</a>
+    <div class="topbar-nav">
+      <a class="nav-link" href="/index.html">展厅首页</a>
+      <a class="nav-link is-active" href="/login.html">模型录入</a>
+    </div>
   </header>
 
   <main class="auth-shell">
     <section class="auth-card">
-      <h2>Sign In</h2>
-      <p class="panel-hint">Authenticate before entering model management.</p>
+      <h2>管理员登录</h2>
+      <p class="panel-hint">登录后可进行车型录入、编辑与删除管理。</p>
 
       <form class="model-form" @submit.prevent="handleSubmit">
         <label>
-          Username
+          用户名
           <input v-model.trim="username" name="username" class="input" autocomplete="username" required />
         </label>
         <label>
-          Password
+          密码
           <input
             v-model="password"
             name="password"
@@ -28,7 +31,7 @@
             required
           />
         </label>
-        <button type="submit" class="btn-primary" :disabled="pending">Sign In</button>
+        <button type="submit" class="btn-primary" :disabled="pending">登录后台</button>
       </form>
 
       <p class="form-status" :class="statusClass" role="status" aria-live="polite">{{ statusMessage }}</p>
@@ -61,19 +64,19 @@ async function ensureGuest() {
       return false;
     }
   } catch (error) {
-    setStatus(`Failed to verify auth state: ${error.message}`, "error");
+    setStatus(`认证状态检查失败：${error.message}`, "error");
   }
   return true;
 }
 
 async function handleSubmit() {
   if (!username.value || !password.value) {
-    setStatus("Username and password are required.", "error");
+    setStatus("请输入用户名和密码。", "error");
     return;
   }
 
   pending.value = true;
-  setStatus("Signing in...", "info");
+  setStatus("正在登录...", "info");
 
   try {
     await login({
@@ -82,7 +85,7 @@ async function handleSubmit() {
     });
     window.location.replace("/admin.html");
   } catch (error) {
-    setStatus(`Sign-in failed: ${error.message}`, "error");
+    setStatus(`登录失败：${error.message}`, "error");
   } finally {
     pending.value = false;
   }

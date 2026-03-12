@@ -10,113 +10,179 @@
         </svg>
       </span>
       <div>
-        <p class="brand-kicker">Collector's Catalog</p>
-        <h1 class="brand-title brand-title-art">zhang3woshi的车库</h1>
+        <p class="brand-kicker">Zhangyu Diecast Collection</p>
+        <h1 class="brand-title brand-title-art">火柴盒 & 风火轮车模收藏</h1>
       </div>
     </div>
-    <div class="topbar-actions">
+
+    <nav class="topbar-nav" aria-label="主导航">
+      <a class="nav-link is-active" href="/index.html">首页</a>
+      <a class="nav-link" href="#latest">最新收藏</a>
+      <a class="nav-link" href="#browse">浏览收藏</a>
+      <a class="nav-link" href="#collection">全部收藏</a>
       <a class="nav-link hero-entry-link" href="/login.html">模型录入</a>
+    </nav>
+
+    <div class="topbar-search">
+      <input v-model.trim="searchQuery" class="input" type="search" placeholder="搜索车型 / 品牌 / 标签" />
     </div>
   </header>
 
   <main class="layout">
-    <section class="hero">
-      <div class="hero-left">
-        <div class="hero-content">
-          <section class="hero-panel hero-search-panel" aria-label="搜索筛选">
-            <div class="filters">
-              <input
-                v-model.trim="searchQuery"
-                class="input"
-                type="search"
-                placeholder="搜索名称 / 编号 / 系列 / 标签"
-              />
-              <select v-model="brandFilter" class="input">
-                <option value="all">全部品牌</option>
-                <option v-for="brand in brands" :key="brand" :value="brand">
-                  {{ brand }}
-                </option>
-              </select>
-            </div>
-          </section>
-
-          <section class="hero-board hero-panel hero-board-panel" aria-label="收藏看板">
-            <p class="hero-board-title">收藏看板</p>
-            <div class="hero-board-grid">
-              <article class="hero-board-item hero-board-item-wide hero-board-item-total">
-                <small>收藏总数</small>
-                <strong>{{ totalCount }}</strong>
-              </article>
-              <article class="hero-board-item">
-                <small>品牌数</small>
-                <strong>{{ brandCount }}</strong>
-              </article>
-              <article class="hero-board-item">
-                <small>标签数</small>
-                <strong>{{ tagCount }}</strong>
-              </article>
-              <article class="hero-board-item hero-board-item-wide">
-                <small>最近更新</small>
-                <strong>{{ latestModelName }}</strong>
-                <span class="hero-board-meta">{{ latestModelMeta }}</span>
-              </article>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div class="hero-random">
-        <div class="hero-random-head">
-          <span class="hero-random-badge">热门</span>
-          <span class="hero-random-line"></span>
-        </div>
-        <div class="hero-random-window">
-          <button class="hero-random-nav hero-random-nav-prev" type="button" aria-label="上一条" @click="prevRandom">
+    <section class="hero-banner">
+      <div class="hero-carousel">
+        <div class="hero-carousel-window" role="button" tabindex="0" @click="handleRandomOpen" @keydown.enter.prevent="handleRandomOpen">
+          <img
+            v-if="randomCurrent?.imageUrl"
+            class="hero-carousel-image"
+            :src="randomCurrent.imageUrl"
+            :alt="randomCurrent.name || '车模图片'"
+            loading="lazy"
+          />
+          <div v-else class="hero-carousel-empty">{{ randomEmptyLabel }}</div>
+          <button class="hero-carousel-nav hero-carousel-nav-prev" type="button" aria-label="上一张" @click.stop="prevRandom">
             ‹
           </button>
-          <div class="hero-random-slide" @click="handleRandomOpen">
-            <img
-              v-if="randomCurrent?.imageUrl"
-              :src="randomCurrent.imageUrl"
-              :alt="randomCurrent.name || '车模图片'"
-              loading="lazy"
-            />
-            <div v-else class="hero-random-empty">
-              {{ randomCurrent ? "No Image" : randomEmptyLabel }}
-            </div>
-          </div>
-          <button class="hero-random-nav hero-random-nav-next" type="button" aria-label="下一条" @click="nextRandom">
+          <button class="hero-carousel-nav hero-carousel-nav-next" type="button" aria-label="下一张" @click.stop="nextRandom">
             ›
           </button>
-          <div class="hero-random-overlay">
-            <p class="hero-random-caption">{{ randomCaption }}</p>
-            <div class="hero-random-dots">
-              <button
-                v-for="(_item, index) in randomModels"
-                :key="`random-dot-${index}`"
-                type="button"
-                class="hero-random-dot"
-                :class="{ active: index === randomIndex }"
-                :aria-label="`切换到第 ${index + 1} 条`"
-                @click="goToRandom(index)"
-              ></button>
-            </div>
-          </div>
+        </div>
+
+        <div class="hero-carousel-indicators">
+          <button
+            v-for="(_item, index) in randomModels"
+            :key="`hero-dot-${index}`"
+            type="button"
+            class="hero-carousel-dot"
+            :class="{ active: index === randomIndex }"
+            :aria-label="`切换到第 ${index + 1} 张`"
+            @click="goToRandom(index)"
+          ></button>
+        </div>
+
+        <div class="hero-actions">
+          <a class="btn-primary hero-action-btn" href="#collection">浏览全部收藏</a>
         </div>
       </div>
     </section>
 
-    <section>
+    <section class="stats-bar" aria-label="收藏统计">
+      <article class="stat-chip">
+        <small>Total Cars</small>
+        <strong>{{ totalCount }}</strong>
+      </article>
+      <article class="stat-chip">
+        <small>Hot Wheels</small>
+        <strong>{{ hotWheelsCount }}</strong>
+      </article>
+      <article class="stat-chip">
+        <small>Matchbox</small>
+        <strong>{{ matchboxCount }}</strong>
+      </article>
+      <article class="stat-chip">
+        <small>Rare Models</small>
+        <strong>{{ rareCount }}</strong>
+      </article>
+    </section>
+
+    <section id="latest" class="section-shell">
+      <div class="section-heading-line">
+        <span></span>
+        <h3 class="section-title">最新收藏</h3>
+        <span></span>
+      </div>
+
+      <div v-if="latestModels.length > 0" class="latest-grid">
+        <article
+          v-for="item in latestModels"
+          :key="item.id || item.name"
+          class="latest-card"
+          role="button"
+          tabindex="0"
+          @click="openDetailModal(item)"
+          @keydown.enter.prevent="openDetailModal(item)"
+        >
+          <div class="latest-cover">
+            <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name || '车模图片'" loading="lazy" />
+            <div v-else class="cover-placeholder">No Image</div>
+          </div>
+          <p class="latest-name">{{ item.name || "未命名车型" }}</p>
+          <p class="latest-date">{{ formatDate(item.createdAt) }} 入库</p>
+        </article>
+      </div>
+      <div v-else class="state-card">暂无最新收藏数据。</div>
+    </section>
+
+    <section id="browse" class="section-shell">
+      <div class="section-heading-line">
+        <span></span>
+        <h3 class="section-title">浏览收藏</h3>
+        <span></span>
+      </div>
+
+      <div class="browse-tiles">
+        <article class="browse-tile" :style="tileBackground(hotWheelsHero?.imageUrl)">
+          <h4>Hot Wheels</h4>
+          <p>{{ hotWheelsCount }} Models</p>
+        </article>
+        <article class="browse-tile" :style="tileBackground(matchboxHero?.imageUrl)">
+          <h4>Matchbox</h4>
+          <p>{{ matchboxCount }} Models</p>
+        </article>
+        <article class="browse-tile">
+          <h4>热门系列</h4>
+          <p>{{ topTagsLine }}</p>
+        </article>
+        <article class="browse-tile browse-tile-year">
+          <h4>换年份筛选</h4>
+          <ul>
+            <li v-for="bucket in yearBuckets" :key="bucket.label">{{ bucket.label }} · {{ bucket.count }}</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="collection" class="section-shell">
+      <div class="section-heading-line">
+        <span></span>
+        <h3 class="section-title">全部收藏</h3>
+        <span></span>
+      </div>
+
+      <section class="collection-tools" aria-label="搜索筛选">
+        <div class="filters">
+          <input
+            v-model.trim="searchQuery"
+            class="input"
+            type="search"
+            placeholder="搜索名称 / 编号 / 系列 / 标签"
+          />
+          <select v-model="brandFilter" class="input">
+            <option value="all">全部品牌</option>
+            <option v-for="brand in brands" :key="brand" :value="brand">
+              {{ brand }}
+            </option>
+          </select>
+        </div>
+      </section>
+
       <div v-if="loading" class="state-card">正在加载车模数据...</div>
-      <div v-if="errorMessage" class="state-card state-error">{{ errorMessage }}</div>
-      <div v-if="showEmpty" class="state-card">没有匹配结果，试试其他关键词。</div>
-      <div v-if="filteredModels.length > 0" class="card-grid">
+      <div v-else-if="errorMessage" class="state-card state-error">{{ errorMessage }}</div>
+      <div v-else-if="showEmpty" class="state-card">没有匹配结果，试试其他关键词。</div>
+      <div v-else class="card-grid">
         <ModelGridCard v-for="item in filteredModels" :key="item.id || item.name" :item="item" @open="openDetailModal" />
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
+    <p class="footer-brand">Zhangyu Diecast Collection</p>
+    <p>收藏年份：{{ timelineStartYear }} | 当前收藏：{{ totalCount }}</p>
+    <div class="footer-icons" aria-hidden="true">
+      <span>f</span>
+      <span>▶</span>
+      <span>✉</span>
+    </div>
     <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">沪ICP备2022001311号-1</a>
   </footer>
 
@@ -124,7 +190,6 @@
     <div class="detail-modal-backdrop" @click="closeDetailModal"></div>
     <div class="detail-modal-panel" role="dialog" aria-modal="true" aria-labelledby="detail-modal-name">
       <button class="detail-modal-close" type="button" aria-label="关闭详情" @click="closeDetailModal">×</button>
-
       <div v-if="detailVisible && !activeDetailItem" class="state-card">未找到该车模，可能已被删除。</div>
       <ModelDetailCard v-if="detailVisible && activeDetailItem" :item="activeDetailItem" title-id="detail-modal-name" />
     </div>
@@ -138,11 +203,9 @@ import ModelGridCard from "../components/ModelGridCard.vue";
 import { useRandomShowcase } from "../composables/useRandomShowcase.js";
 import { fetchModels } from "../js/api.js";
 import {
-  countUniqueTags,
   filterModels,
-  findLatestModel,
-  formatRandomModel,
   getBrandList,
+  sortByLatest,
 } from "../utils/model.js";
 
 const allModels = ref([]);
@@ -179,18 +242,96 @@ const filteredModels = computed(() =>
 const showEmpty = computed(() => !loading.value && !errorMessage.value && filteredModels.value.length === 0);
 
 const totalCount = computed(() => allModels.value.length);
-const brandCount = computed(() => brands.value.length);
-const tagCount = computed(() => countUniqueTags(allModels.value));
+const latestModels = computed(() => sortByLatest(allModels.value).slice(0, 5));
 
-const latestModel = computed(() => findLatestModel(allModels.value));
-const latestModelName = computed(() => String(latestModel.value?.name || "-").trim() || "-");
-const latestModelMeta = computed(() => {
-  if (!latestModel.value) {
-    return "暂无数据";
+const hotWheelsCount = computed(
+  () => allModels.value.filter((item) => String(item.brand || "").toLowerCase().includes("hot wheels")).length,
+);
+const matchboxCount = computed(
+  () => allModels.value.filter((item) => String(item.brand || "").toLowerCase().includes("matchbox")).length,
+);
+const rareCount = computed(() =>
+  allModels.value.filter((item) => {
+    const tags = Array.isArray(item.tags) ? item.tags.join(" ").toLowerCase() : "";
+    const text = [item.series, item.notes, item.name].join(" ").toLowerCase();
+    return /rare|super treasure hunt|treasure hunt|sth|限量|稀有/.test(`${tags} ${text}`);
+  }).length,
+);
+
+const hotWheelsHero = computed(() =>
+  allModels.value.find((item) => String(item.brand || "").toLowerCase().includes("hot wheels") && item.imageUrl),
+);
+const matchboxHero = computed(() =>
+  allModels.value.find((item) => String(item.brand || "").toLowerCase().includes("matchbox") && item.imageUrl),
+);
+
+const topBrandSummary = computed(() => {
+  const values = brands.value.slice(0, 2);
+  return values.length > 0 ? values.join(" / ") : "暂无";
+});
+
+const collectionYearRange = computed(() => {
+  const years = allModels.value
+    .map((item) => Number.parseInt(String(item.year || "").trim(), 10))
+    .filter((value) => Number.isInteger(value) && value > 0)
+    .sort((a, b) => a - b);
+  if (years.length === 0) {
+    return "-";
   }
-  const brand = String(latestModel.value.brand || "Unknown").trim();
-  const modelCode = String(latestModel.value.modelCode || "").trim();
-  return modelCode ? `${brand} · 编号 ${modelCode}` : brand || "暂无数据";
+  return years[0] === years[years.length - 1] ? String(years[0]) : `${years[0]}-${years[years.length - 1]}`;
+});
+
+const parsedYears = computed(() =>
+  allModels.value
+    .map((item) => Number.parseInt(String(item.year || "").trim(), 10))
+    .filter((value) => Number.isInteger(value) && value > 0),
+);
+
+const timelineStartYear = computed(() => {
+  if (parsedYears.value.length === 0) {
+    return 2018;
+  }
+  return Math.min(...parsedYears.value);
+});
+
+const yearBuckets = computed(() => {
+  const buckets = [
+    { label: "1968-1990", count: 0, match: (year) => year >= 1968 && year <= 1990 },
+    { label: "1982-2000", count: 0, match: (year) => year >= 1982 && year <= 2000 },
+    { label: "2000-2020", count: 0, match: (year) => year >= 2000 && year <= 2020 },
+    { label: "2020+", count: 0, match: (year) => year >= 2020 },
+  ];
+
+  for (const year of parsedYears.value) {
+    for (const bucket of buckets) {
+      if (bucket.match(year)) {
+        bucket.count += 1;
+      }
+    }
+  }
+
+  return buckets;
+});
+
+const topTagsLine = computed(() => {
+  const tagMap = new Map();
+  for (const item of allModels.value) {
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    for (const tag of tags) {
+      const normalized = String(tag || "").trim();
+      if (!normalized) {
+        continue;
+      }
+      tagMap.set(normalized, (tagMap.get(normalized) || 0) + 1);
+    }
+  }
+
+  const top = [...tagMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tag]) => tag);
+
+  return top.length > 0 ? top.join(" / ") : "Premium / Mainline / Treasure Hunt";
 });
 
 const randomEmptyLabel = computed(() => {
@@ -202,7 +343,26 @@ const randomEmptyLabel = computed(() => {
   }
   return "暂无车模";
 });
-const randomCaption = computed(() => formatRandomModel(randomCurrent.value, randomEmptyLabel.value));
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleDateString("zh-CN");
+}
+
+function tileBackground(imageURL) {
+  if (!imageURL) {
+    return {};
+  }
+  return {
+    backgroundImage: `linear-gradient(130deg, rgba(6, 9, 16, 0.66), rgba(9, 12, 22, 0.74)), url("${imageURL}")`,
+  };
+}
 
 function closeDetailModal() {
   detailVisible.value = false;
@@ -259,4 +419,3 @@ onUnmounted(() => {
   stopRandomShowcase();
 });
 </script>
-

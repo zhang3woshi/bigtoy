@@ -1,11 +1,11 @@
 <template>
   <header class="topbar">
     <div class="brand-block">
-      <p class="brand-kicker">Model Detail</p>
+      <p class="brand-kicker">Zhangyu Diecast Collection</p>
       <h1 class="brand-title">车模详情</h1>
     </div>
-    <div class="topbar-actions">
-      <a class="nav-link" href="/index.html">返回展厅</a>
+    <div class="topbar-nav">
+      <a class="nav-link" href="/index.html">展厅首页</a>
       <a class="nav-link" href="/login.html">模型录入</a>
     </div>
   </header>
