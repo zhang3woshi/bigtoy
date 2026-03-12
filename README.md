@@ -66,6 +66,40 @@ npm.cmd run dev
 
 Frontend default: `http://localhost:5173`
 
+## Unit Tests And Coverage
+
+### Backend (Go)
+
+Run backend unit tests:
+
+```powershell
+cd backend
+go test ./...
+```
+
+Run backend service-layer coverage (threshold: >= 85%):
+
+```powershell
+cd backend
+powershell -ExecutionPolicy Bypass -File .\check-coverage.ps1
+```
+
+### Frontend (Vite + Vitest)
+
+Run frontend unit tests:
+
+```powershell
+cd frontend
+npm.cmd run test
+```
+
+Run frontend coverage (threshold: >= 85%):
+
+```powershell
+cd frontend
+npm.cmd run test:coverage
+```
+
 ## Build Frontend To Backend Static
 
 Run in project root:

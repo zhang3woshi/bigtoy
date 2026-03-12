@@ -33,6 +33,13 @@ type ModelStore struct {
 	legacyDataPath string
 }
 
+func (s *ModelStore) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
 func NewModelStore(dbPath, imagesRoot, legacyDataPath string) (*ModelStore, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("create db directory: %w", err)

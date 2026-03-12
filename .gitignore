@@ -8,3 +8,7 @@ backend/conf/secrets.env
 backend/conf/secrets.local.env
 backend/data/
 dist/
+backend/$profileFile
+backend/coverage
+backend/coverage_cs
+frontend/coverage/
