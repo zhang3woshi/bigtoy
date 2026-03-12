@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <header class="topbar">
     <div class="brand-block">
       <p class="brand-kicker">Zhangyu Diecast Collection</p>

@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <header class="topbar">
     <div class="brand-block">
       <p class="brand-kicker">Zhangyu Diecast Collection</p>
-      <h1 class="brand-title">模型录入后台</h1>
+      <h1 class="brand-title">车模录入后台</h1>
     </div>
     <div class="topbar-nav">
       <a class="nav-link" href="/index.html">展厅首页</a>
@@ -98,7 +98,7 @@
         </label>
 
         <label>
-          更多图片文件（可多选）
+          更多图片（可多选）
           <input
             ref="galleryInputRef"
             name="galleryFiles"
@@ -244,7 +244,7 @@ const isEditing = computed(() => typeof editingModelID.value === "string" && edi
 const formTitle = computed(() => (isEditing.value ? `编辑车型 #${editingModelID.value}` : "新增车型"));
 const formHint = computed(() =>
   isEditing.value
-    ? "可修改文本信息；若重新上传图片文件，会覆盖该车型原有图片。"
+    ? "可以修改文本信息；若重新上传图片文件，会覆盖该车型原有图片。"
     : "保存后会立即出现在对外展示页。",
 );
 const submitLabel = computed(() => (isEditing.value ? "保存修改" : "保存车型"));
@@ -471,7 +471,8 @@ async function handleDelete(item) {
     return;
   }
 
-  const confirmed = window.confirm(`确认删除模型「${item.name || `ID ${modelID}`}」吗？此操作不可撤销。`);
+  const modelLabel = item.name || `ID ${modelID}`;
+  const confirmed = window.confirm(`确认删除模型「${modelLabel}」吗？此操作不可撤销。`);
   if (!confirmed) {
     return;
   }
