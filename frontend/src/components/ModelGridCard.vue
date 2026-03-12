@@ -39,10 +39,9 @@ const modelCodeLabel = computed(() => getModelCodeLabel(props.item?.modelCode));
 
 function handleClick(event) {
   void event;
-  const modelID = String(props.item?.id || "").trim();
-  if (!modelID) {
+  if (!props.item || typeof props.item !== "object") {
     return;
   }
-  emit("open", modelID);
+  emit("open", props.item);
 }
 </script>

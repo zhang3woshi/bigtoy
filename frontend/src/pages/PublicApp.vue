@@ -208,24 +208,26 @@ function closeDetailModal() {
   detailVisible.value = false;
 }
 
-function openDetailModal(modelID) {
-  const normalizedID = String(modelID || "").trim();
-  if (!normalizedID) {
-    activeDetailItem.value = null;
+function openDetailModal(payload) {
+  if (payload && typeof payload === "object") {
+    activeDetailItem.value = payload;
     detailVisible.value = true;
     return;
   }
-  const item = allModels.value.find((entry) => String(entry?.id || "").trim() === normalizedID) || null;
+
+  const normalizedID = String(payload || "").trim();
+  const item = normalizedID
+    ? allModels.value.find((entry) => String(entry?.id || "").trim() === normalizedID) || null
+    : null;
   activeDetailItem.value = item;
   detailVisible.value = true;
 }
 
 function handleRandomOpen() {
-  const modelID = String(randomCurrent.value?.id || "").trim();
-  if (!modelID) {
+  if (!randomCurrent.value) {
     return;
   }
-  openDetailModal(modelID);
+  openDetailModal(randomCurrent.value);
 }
 
 function handleKeydown(event) {

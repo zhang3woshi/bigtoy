@@ -30,34 +30,20 @@ describe("ModelGridCard", () => {
   });
 
   it("emits open event for valid id", async () => {
+    const payload = {
+      id: modelID,
+      name: "Skyline",
+    };
     const wrapper = mount(ModelGridCard, {
       props: {
-        item: {
-          id: modelID,
-          name: "Skyline",
-        },
+        item: payload,
       },
     });
 
     await wrapper.find("a").trigger("click", {
       preventDefault: vi.fn(),
     });
-    expect(wrapper.emitted("open")).toEqual([[modelID]]);
+    expect(wrapper.emitted("open")).toEqual([[payload]]);
   });
 
-  it("does not emit open event when id is invalid", () => {
-    const wrapper = mount(ModelGridCard, {
-      props: {
-        item: {
-          id: "",
-          name: "No ID",
-        },
-      },
-    });
-
-    wrapper.find("a").trigger("click", {
-      preventDefault: vi.fn(),
-    });
-    expect(wrapper.emitted("open")).toBeUndefined();
-  });
 });
