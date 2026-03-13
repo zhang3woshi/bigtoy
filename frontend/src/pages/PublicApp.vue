@@ -185,6 +185,12 @@
                 {{ brand }}
               </option>
             </select>
+            <select v-model="sortRule" class="input" aria-label="排序规则">
+              <option value="modelCode-asc">编号（升序）</option>
+              <option value="modelCode-desc">编号（降序）</option>
+              <option value="createdAt-asc">加入时间（升序）</option>
+              <option value="createdAt-desc">加入时间（降序）</option>
+            </select>
           </div>
         </section>
 
@@ -227,6 +233,7 @@ const loading = ref(true);
 const errorMessage = ref("");
 const searchQuery = ref("");
 const brandFilter = ref("all");
+const sortRule = ref("createdAt-desc");
 
 const detailVisible = ref(false);
 const activeDetailItem = ref(null);
@@ -251,12 +258,13 @@ const {
 });
 
 const brands = computed(() => getBrandList(allModels.value));
-const filteredModels = computed(() =>
-  filterModels(allModels.value, {
+const filteredModels = computed(() => {
+  const filtered = filterModels(allModels.value, {
     query: searchQuery.value,
     brand: brandFilter.value,
-  }),
-);
+  });
+  return sortCollectionModels(filtered, sortRule.value);
+});
 const showEmpty = computed(() => !loading.value && !errorMessage.value && filteredModels.value.length === 0);
 
 const totalCount = computed(() => allModels.value.length);
@@ -362,6 +370,60 @@ const randomEmptyLabel = computed(() => {
 const heroImageStyle = computed(() => ({
   objectPosition: heroImageObjectPosition.value,
 }));
+
+function toSafeTimestamp(value) {
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function compareLocaleValue(left, right, direction = "asc") {
+  const compared = String(left || "").trim().localeCompare(String(right || "").trim(), "zh-CN", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  return direction === "desc" ? -compared : compared;
+}
+
+function sortCollectionModels(items, selectedRule) {
+  const values = [...(items || [])];
+  if (selectedRule === "modelCode-asc") {
+    return values.sort((a, b) => {
+      const codeCompared = compareLocaleValue(a?.modelCode, b?.modelCode, "asc");
+      if (codeCompared !== 0) {
+        return codeCompared;
+      }
+      return compareLocaleValue(a?.id, b?.id, "asc");
+    });
+  }
+
+  if (selectedRule === "modelCode-desc") {
+    return values.sort((a, b) => {
+      const codeCompared = compareLocaleValue(a?.modelCode, b?.modelCode, "desc");
+      if (codeCompared !== 0) {
+        return codeCompared;
+      }
+      return compareLocaleValue(a?.id, b?.id, "desc");
+    });
+  }
+
+  if (selectedRule === "createdAt-asc") {
+    return values.sort((a, b) => {
+      const timeCompared = toSafeTimestamp(a?.createdAt) - toSafeTimestamp(b?.createdAt);
+      if (timeCompared !== 0) {
+        return timeCompared;
+      }
+      return compareLocaleValue(a?.id, b?.id, "asc");
+    });
+  }
+
+  return values.sort((a, b) => {
+    const timeCompared = toSafeTimestamp(b?.createdAt) - toSafeTimestamp(a?.createdAt);
+    if (timeCompared !== 0) {
+      return timeCompared;
+    }
+    return compareLocaleValue(a?.id, b?.id, "desc");
+  });
+}
 
 function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, value));

@@ -534,7 +534,7 @@ body.modal-open {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  grid-template-columns: minmax(0, 2fr) minmax(170px, 220px) minmax(180px, 250px);
   gap: 10px;
 }
 
@@ -1635,6 +1635,7 @@ body.modal-open {
 .page-public {
   font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   color: #1f2b3d;
+  overflow-x: clip;
   background:
     radial-gradient(circle at 12% -10%, rgba(255, 192, 120, 0.22), transparent 34%),
     radial-gradient(circle at 88% -14%, rgba(55, 97, 152, 0.18), transparent 40%),
@@ -1648,6 +1649,7 @@ body.modal-open {
 .page-public .showcase-root {
   display: grid;
   gap: 16px;
+  overflow-x: clip;
 }
 
 .page-public .showcase-topbar,
@@ -2130,7 +2132,7 @@ body.modal-open {
 
 .page-public .filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  grid-template-columns: minmax(0, 2fr) minmax(170px, 220px) minmax(180px, 250px);
   gap: 10px;
 }
 
@@ -2258,12 +2260,33 @@ body.modal-open {
 
 @media (max-width: 920px) {
   .page-public .showcase-topbar {
+    position: static;
     grid-template-columns: 1fr;
     justify-items: stretch;
+    gap: 10px;
+    padding: 11px 12px;
   }
 
   .page-public .showcase-nav {
+    flex-wrap: nowrap;
     justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page-public .showcase-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .page-public .showcase-nav-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .page-public .showcase-search {
+    width: 100%;
   }
 
   .page-public .showcase-hero-window {
@@ -2309,38 +2332,107 @@ body.modal-open {
     font-size: 13px;
   }
 
+  .page-public .showcase-topbar {
+    margin-top: 8px;
+    padding: 10px;
+    gap: 9px;
+  }
+
+  .page-public .showcase-brand-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .page-public .showcase-brand-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .page-public .showcase-brand-copy strong {
+    font-size: 14px;
+  }
+
+  .page-public .showcase-brand-copy small {
+    font-size: 12px;
+  }
+
   .page-public .showcase-hero-window {
     height: clamp(220px, 58vw, 300px);
     max-height: 52vh;
   }
 
   .page-public .showcase-hero-content {
-    padding: 14px;
-    gap: 8px;
+    padding: 12px 12px 18px;
+    gap: 6px;
+  }
+
+  .page-public .showcase-hero-kicker {
+    font-size: clamp(15px, 5vw, 22px);
+  }
+
+  .page-public .showcase-hero-title {
+    font-size: clamp(24px, 9vw, 36px);
+    line-height: 1.15;
   }
 
   .page-public .showcase-hero-meta {
     font-size: 12px;
+    gap: 5px;
+  }
+
+  .page-public .showcase-hero-meta span {
+    display: none;
   }
 
   .page-public .showcase-hero-btn {
     min-height: 38px;
+    width: min(88vw, 280px);
     padding: 0 14px;
     font-size: 14px;
   }
 
   .page-public .showcase-hero-nav {
-    width: 34px;
-    height: 34px;
-    font-size: 22px;
+    top: auto;
+    bottom: 10px;
+    transform: none;
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
   }
 
   .page-public .showcase-hero-nav-prev {
-    left: 8px;
+    left: 10px;
   }
 
   .page-public .showcase-hero-nav-next {
-    right: 8px;
+    right: 10px;
+  }
+
+  .page-public .showcase-stats {
+    margin-top: 0;
+  }
+
+  .page-public .showcase-stat {
+    padding: 10px 8px;
+  }
+
+  .page-public .showcase-stat strong {
+    font-size: clamp(24px, 9vw, 34px);
+  }
+
+  .page-public .showcase-heading {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    text-align: center;
+  }
+
+  .page-public .showcase-heading span {
+    display: none;
+  }
+
+  .page-public .showcase-heading h2 em {
+    display: block;
+    margin: 4px 0 0;
   }
 
   .page-public .showcase-latest-grid {
@@ -2349,6 +2441,66 @@ body.modal-open {
 
   .page-public .showcase-browse-grid {
     grid-template-columns: 1fr;
+  }
+
+  .page-public .detail-modal {
+    padding: 8px;
+  }
+
+  .page-public .detail-modal-panel {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    padding: 40px 12px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-public .showcase-topbar,
+  .page-public .showcase-main,
+  .page-public .showcase-footer,
+  .page-public .showcase-hero-dots {
+    width: calc(100% - 12px);
+  }
+
+  .page-public .showcase-brand-copy small {
+    display: none;
+  }
+
+  .page-public .showcase-hero-window {
+    height: clamp(200px, 66vw, 260px);
+    max-height: 46vh;
+  }
+
+  .page-public .showcase-hero-content {
+    padding: 10px 10px 16px;
+  }
+
+  .page-public .showcase-hero-title {
+    font-size: clamp(22px, 9.2vw, 30px);
+  }
+
+  .page-public .showcase-hero-kicker {
+    font-size: clamp(13px, 4.8vw, 18px);
+  }
+
+  .page-public .showcase-hero-meta {
+    font-size: 11px;
+  }
+
+  .page-public .showcase-latest-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-public .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-public .showcase-section {
+    padding: 12px;
+  }
+
+  .page-public .showcase-stat small {
+    font-size: 11px;
   }
 }
 
