@@ -14,8 +14,8 @@
 
   <main class="layout admin-layout">
     <section class="panel">
-      <h2>{{ formTitle }}</h2>
-      <p class="panel-hint">{{ formHint }}</p>
+      <h2>新增车型</h2>
+      <p class="panel-hint">保存后会立即出现在对外展示页。</p>
 
       <form class="model-form" enctype="multipart/form-data" @submit.prevent="handleSubmit">
         <div class="grid-two">
@@ -126,16 +126,7 @@
         </label>
 
         <div class="form-actions">
-          <button type="submit" class="btn-primary" :disabled="submitPending">{{ submitLabel }}</button>
-          <button
-            v-if="isEditing"
-            type="button"
-            class="btn-secondary"
-            :disabled="submitPending"
-            @click="cancelEdit"
-          >
-            取消编辑
-          </button>
+          <button type="submit" class="btn-primary" :disabled="submitPending">保存车型</button>
         </div>
       </form>
 
@@ -170,7 +161,7 @@
                 type="button"
                 class="btn-inline"
                 :disabled="submitPending || deletingModelID === item.id"
-                @click="startEdit(item)"
+                @click="goToEdit(item)"
               >
                 编辑
               </button>
@@ -206,15 +197,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
-import {
-  createModel,
-  deleteModel,
-  fetchAuthState,
-  fetchModels,
-  logout,
-  updateModel,
-} from "../js/api.js";
+import { computed, onMounted, reactive, ref } from "vue";
+import { createModel, deleteModel, fetchAuthState, fetchModels, logout } from "../js/api.js";
 import { getModelCodeLabel, sortByLatest } from "../utils/model.js";
 
 const pageSize = 10;
@@ -224,7 +208,6 @@ const galleryInputRef = ref(null);
 
 const currentModels = ref([]);
 const currentPage = ref(1);
-const editingModelID = ref(null);
 const imageFile = ref(null);
 const galleryFiles = ref([]);
 
@@ -239,14 +222,6 @@ const statusKind = ref("info");
 
 const form = reactive(createInitialForm());
 
-const isEditing = computed(() => typeof editingModelID.value === "string" && editingModelID.value.length > 0);
-const formTitle = computed(() => (isEditing.value ? `编辑车型 #${editingModelID.value}` : "新增车型"));
-const formHint = computed(() =>
-  isEditing.value
-    ? "可以修改文本信息；若重新上传图片文件，会覆盖该车型原有图片。"
-    : "保存后会立即出现在对外展示页。",
-);
-const submitLabel = computed(() => (isEditing.value ? "保存修改" : "保存车型"));
 const statusClass = computed(() => `form-status-${statusKind.value}`);
 
 const totalPages = computed(() => Math.max(1, Math.ceil(currentModels.value.length / pageSize)));
@@ -312,36 +287,6 @@ function resetForm() {
   clearFileInputs();
 }
 
-function exitEditMode() {
-  editingModelID.value = null;
-}
-
-function cancelEdit() {
-  exitEditMode();
-  resetForm();
-  setStatus("已取消编辑。", "info");
-}
-
-function startEdit(item) {
-  editingModelID.value = String(item.id || "").trim();
-  Object.assign(form, {
-    name: item.name || "",
-    modelCode: item.modelCode || "",
-    brand: normalizeBrand(item.brand),
-    series: item.series || "",
-    scale: item.scale || "",
-    year: Number.isFinite(item.year) ? String(item.year) : "",
-    color: item.color || "",
-    condition: item.condition || "",
-    material: item.material || "",
-    tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
-    notes: item.notes || "",
-  });
-  clearFileInputs();
-  setStatus(`正在编辑：${item.name || `ID ${item.id}`}`, "info");
-  nextTick(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-}
-
 function normalizeBrand(value) {
   const brand = String(value || "").trim();
   if (brand.toLowerCase() === "matchbox") {
@@ -363,7 +308,7 @@ function buildPayloadFormData() {
   const payload = new FormData();
   payload.set("name", String(form.name || "").trim());
   payload.set("modelCode", String(form.modelCode || "").trim());
-  payload.set("brand", String(form.brand || "").trim());
+  payload.set("brand", normalizeBrand(form.brand));
   payload.set("series", String(form.series || "").trim());
   payload.set("scale", String(form.scale || "").trim());
   payload.set("color", String(form.color || "").trim());
@@ -394,6 +339,17 @@ function buildPayloadFormData() {
   }
 
   return payload;
+}
+
+function goToEdit(item) {
+  const modelID = String(item?.id || "").trim();
+  if (!modelID) {
+    setStatus("无效的车型 ID，无法进入编辑页。", "error");
+    return;
+  }
+
+  const query = new URLSearchParams({ id: modelID });
+  window.location.href = `/admin-edit.html?${query.toString()}`;
 }
 
 async function refreshRecent() {
@@ -441,15 +397,9 @@ async function handleSubmit() {
 
   try {
     const payload = buildPayloadFormData();
-    if (isEditing.value) {
-      await updateModel(editingModelID.value, payload);
-      setStatus("修改成功。", "success");
-    } else {
-      await createModel(payload);
-      setStatus("保存成功，展示页已可见。", "success");
-    }
+    await createModel(payload);
+    setStatus("保存成功，展示页已可见。", "success");
 
-    exitEditMode();
     resetForm();
     await refreshRecent();
   } catch (error) {
@@ -479,9 +429,6 @@ async function handleDelete(item) {
   deletingModelID.value = modelID;
   try {
     await deleteModel(modelID);
-    if (editingModelID.value === modelID) {
-      cancelEdit();
-    }
     setStatus("删除成功。", "success");
     await refreshRecent();
   } catch (error) {
@@ -511,7 +458,6 @@ onMounted(async () => {
   if (!authenticated) {
     return;
   }
-  exitEditMode();
   resetForm();
   await refreshRecent();
 });

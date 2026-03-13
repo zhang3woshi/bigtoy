@@ -836,6 +836,13 @@ body.modal-open {
   flex-wrap: wrap;
 }
 
+.btn-secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .form-status {
   min-height: 20px;
   margin-top: 10px;
@@ -951,6 +958,63 @@ body.modal-open {
 .recent-pagination-actions {
   display: flex;
   gap: 8px;
+}
+
+.edit-image-section {
+  display: grid;
+  gap: 8px;
+}
+
+.edit-image-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.edit-cover-preview {
+  width: min(280px, 100%);
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid rgba(255, 208, 130, 0.26);
+  background: #1a0f0a;
+  display: grid;
+  place-items: center;
+}
+
+.edit-cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.edit-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.edit-gallery-item {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid rgba(255, 208, 130, 0.26);
+  background: #1a0f0a;
+  aspect-ratio: 1 / 1;
+}
+
+.edit-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.edit-gallery-empty {
+  border: 1px dashed rgba(255, 208, 130, 0.26);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: rgba(26, 15, 10, 0.45);
 }
 
 .auth-shell {
@@ -1746,6 +1810,7 @@ body.modal-open {
   display: block;
   object-fit: cover;
   object-position: center;
+  transition: object-position 420ms ease;
   animation: hero-zoom 6.8s ease both;
 }
 
@@ -2467,6 +2532,36 @@ body.modal-open {
 .auth-page .btn-inline-danger {
   border-color: #e6b5b5;
   color: #b54545;
+}
+
+.page-admin .btn-secondary-link,
+.page-detail .btn-secondary-link,
+.auth-page .btn-secondary-link {
+  color: #2a3a52;
+}
+
+.page-admin .edit-image-label,
+.page-detail .edit-image-label,
+.auth-page .edit-image-label {
+  color: #60728a;
+}
+
+.page-admin .edit-cover-preview,
+.page-admin .edit-gallery-item,
+.page-detail .edit-cover-preview,
+.page-detail .edit-gallery-item,
+.auth-page .edit-cover-preview,
+.auth-page .edit-gallery-item {
+  border-color: #d4deeb;
+  background: #e2eaf5;
+}
+
+.page-admin .edit-gallery-empty,
+.page-detail .edit-gallery-empty,
+.auth-page .edit-gallery-empty {
+  border-color: #d4deeb;
+  color: #607087;
+  background: #f5f8fd;
 }
 
 .page-admin .recent-pagination-status {

@@ -26,6 +26,14 @@ func (c *PageController) Admin() {
 	c.TplName = "admin.html"
 }
 
+func (c *PageController) AdminEdit() {
+	if _, ok := sessionFromRequest(c.Ctx.Request); !ok {
+		c.Redirect("/login.html", http.StatusFound)
+		return
+	}
+	c.TplName = "admin-edit.html"
+}
+
 func (c *PageController) Login() {
 	if _, ok := sessionFromRequest(c.Ctx.Request); ok {
 		c.Redirect("/admin.html", http.StatusFound)

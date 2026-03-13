@@ -74,6 +74,17 @@ func TestPageControllerAdminRedirectWithoutSession(t *testing.T) {
 	if location := recorder.Header().Get("Location"); location != "/login.html" {
 		t.Fatalf("unexpected redirect location: %s", location)
 	}
+
+	editRequest := httptest.NewRequest(http.MethodGet, "/admin-edit.html", nil)
+	editController, editRecorder := newPageControllerForTest(editRequest)
+	editController.AdminEdit()
+
+	if editRecorder.Code != http.StatusFound {
+		t.Fatalf("expected edit redirect status, got %d", editRecorder.Code)
+	}
+	if location := editRecorder.Header().Get("Location"); location != "/login.html" {
+		t.Fatalf("unexpected edit redirect location: %s", location)
+	}
 }
 
 func TestPageControllerAdminAndLoginWithSession(t *testing.T) {
@@ -91,6 +102,20 @@ func TestPageControllerAdminAndLoginWithSession(t *testing.T) {
 	}
 	if adminController.TplName != "admin.html" {
 		t.Fatalf("unexpected admin tpl: %s", adminController.TplName)
+	}
+
+	editRequest := httptest.NewRequest(http.MethodGet, "/admin-edit.html", nil)
+	editRequest.AddCookie(&http.Cookie{
+		Name:  authService.CookieName(),
+		Value: token,
+	})
+	editController, editRecorder := newPageControllerForTest(editRequest)
+	editController.AdminEdit()
+	if editRecorder.Code != http.StatusOK {
+		t.Fatalf("unexpected admin edit status: %d", editRecorder.Code)
+	}
+	if editController.TplName != "admin-edit.html" {
+		t.Fatalf("unexpected admin edit tpl: %s", editController.TplName)
 	}
 
 	loginRequest := httptest.NewRequest(http.MethodGet, "/login.html", nil)

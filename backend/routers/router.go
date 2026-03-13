@@ -70,6 +70,8 @@ func Register() error {
 	web.Router("/login.html", &controllers.PageController{}, "get:Login")
 	web.Router("/admin", &controllers.PageController{}, "get:Admin")
 	web.Router("/admin.html", &controllers.PageController{}, "get:Admin")
+	web.Router("/admin-edit", &controllers.PageController{}, "get:AdminEdit")
+	web.Router("/admin-edit.html", &controllers.PageController{}, "get:AdminEdit")
 
 	fmt.Printf("BigToy backend started. DB: %s, views path: %s, uploads path: %s\n", dbPath, viewsPath, uploadsPath)
 	return nil

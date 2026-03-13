@@ -15,6 +15,7 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         model: resolve(__dirname, "model.html"),
         admin: resolve(__dirname, "admin.html"),
+        adminEdit: resolve(__dirname, "admin-edit.html"),
         login: resolve(__dirname, "login.html"),
       },
     },

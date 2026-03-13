@@ -37,13 +37,15 @@
 
     <main class="showcase-main">
       <section class="showcase-hero-bleed">
-        <div class="showcase-hero-window" role="button" tabindex="0" @click="handleRandomOpen" @keydown.enter.prevent="handleRandomOpen">
+        <div class="showcase-hero-window" role="button" tabindex="0" @click="handleRandomOpen" @keydown.enter="handleHeroEnter">
           <img
             v-if="randomCurrent?.imageUrl"
             class="showcase-hero-image"
             :src="randomCurrent.imageUrl"
             :alt="randomCurrent.name || '车模图片'"
+            :style="heroImageStyle"
             loading="lazy"
+            @load="handleHeroImageLoad"
           />
           <div v-else class="showcase-hero-empty">{{ randomEmptyLabel }}</div>
 
@@ -59,7 +61,7 @@
               <span>·</span>
               年代跨度 {{ collectionYearRange }}
             </p>
-            <a class="showcase-hero-btn" href="#collection">浏览全部收藏</a>
+            <a class="showcase-hero-btn" href="#collection" @click.stop @keydown.enter.stop>浏览全部收藏</a>
           </div>
 
           <button class="showcase-hero-nav showcase-hero-nav-prev" type="button" aria-label="上一张" @click.stop="prevRandom">
@@ -229,6 +231,10 @@ const brandFilter = ref("all");
 const detailVisible = ref(false);
 const activeDetailItem = ref(null);
 
+const DEFAULT_HERO_IMAGE_POSITION = "50% 50%";
+const heroImageObjectPosition = ref(DEFAULT_HERO_IMAGE_POSITION);
+const heroFocusCache = new Map();
+
 const {
   randomModels,
   randomIndex,
@@ -353,6 +359,163 @@ const randomEmptyLabel = computed(() => {
   return "暂无车模";
 });
 
+const heroImageStyle = computed(() => ({
+  objectPosition: heroImageObjectPosition.value,
+}));
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function toPercent(value, min, max) {
+  const clamped = clampNumber(value, min, max);
+  return `${(Math.round(clamped * 10) / 10).toFixed(1)}%`;
+}
+
+function sampleBackgroundColor(imageData, width, height) {
+  const pixels = [
+    [0, 0],
+    [Math.max(0, width - 1), 0],
+    [0, Math.max(0, height - 1)],
+    [Math.max(0, width - 1), Math.max(0, height - 1)],
+    [Math.floor(width / 2), 0],
+    [Math.floor(width / 2), Math.max(0, height - 1)],
+    [0, Math.floor(height / 2)],
+    [Math.max(0, width - 1), Math.floor(height / 2)],
+  ];
+
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  for (const [x, y] of pixels) {
+    const offset = (y * width + x) * 4;
+    red += imageData[offset] || 0;
+    green += imageData[offset + 1] || 0;
+    blue += imageData[offset + 2] || 0;
+  }
+
+  const divisor = Math.max(1, pixels.length);
+  return {
+    red: red / divisor,
+    green: green / divisor,
+    blue: blue / divisor,
+  };
+}
+
+function detectImageFocusPosition(imageElement) {
+  const naturalWidth = Number(imageElement?.naturalWidth || 0);
+  const naturalHeight = Number(imageElement?.naturalHeight || 0);
+  if (naturalWidth <= 0 || naturalHeight <= 0 || typeof document === "undefined") {
+    return DEFAULT_HERO_IMAGE_POSITION;
+  }
+
+  const maxEdge = 300;
+  const scale = Math.min(1, maxEdge / Math.max(naturalWidth, naturalHeight));
+  const width = Math.max(40, Math.round(naturalWidth * scale));
+  const height = Math.max(40, Math.round(naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    return DEFAULT_HERO_IMAGE_POSITION;
+  }
+
+  try {
+    context.drawImage(imageElement, 0, 0, width, height);
+    const imageData = context.getImageData(0, 0, width, height).data;
+    const luminance = new Float32Array(width * height);
+
+    for (let index = 0; index < width * height; index += 1) {
+      const offset = index * 4;
+      const red = imageData[offset];
+      const green = imageData[offset + 1];
+      const blue = imageData[offset + 2];
+      luminance[index] = red * 0.299 + green * 0.587 + blue * 0.114;
+    }
+
+    const background = sampleBackgroundColor(imageData, width, height);
+    let totalScore = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const index = y * width + x;
+        const offset = index * 4;
+        const alpha = imageData[offset + 3];
+        if (alpha < 10) {
+          continue;
+        }
+
+        const edgeScore =
+          Math.abs(luminance[index - 1] - luminance[index + 1]) +
+          Math.abs(luminance[index - width] - luminance[index + width]);
+        const colorScore =
+          Math.abs(imageData[offset] - background.red) +
+          Math.abs(imageData[offset + 1] - background.green) +
+          Math.abs(imageData[offset + 2] - background.blue);
+
+        let score = edgeScore * 0.58 + colorScore * 0.42;
+        if (score < 16) {
+          continue;
+        }
+
+        const centerX = (x / Math.max(1, width - 1)) * 2 - 1;
+        const centerY = (y / Math.max(1, height - 1)) * 2 - 1;
+        const radialDistance = Math.min(1, Math.sqrt(centerX * centerX + centerY * centerY));
+        score *= 1.12 - radialDistance * 0.28;
+
+        totalScore += score;
+        weightedX += score * x;
+        weightedY += score * y;
+      }
+    }
+
+    if (totalScore <= 0) {
+      return DEFAULT_HERO_IMAGE_POSITION;
+    }
+
+    const xPercent = (weightedX / totalScore / Math.max(1, width - 1)) * 100;
+    const yPercent = (weightedY / totalScore / Math.max(1, height - 1)) * 100;
+    return `${toPercent(xPercent, 8, 92)} ${toPercent(yPercent, 10, 90)}`;
+  } catch (_error) {
+    return DEFAULT_HERO_IMAGE_POSITION;
+  }
+}
+
+function syncHeroImagePosition(imageURL) {
+  const normalizedURL = String(imageURL || "").trim();
+  if (!normalizedURL) {
+    heroImageObjectPosition.value = DEFAULT_HERO_IMAGE_POSITION;
+    return;
+  }
+  heroImageObjectPosition.value = heroFocusCache.get(normalizedURL) || DEFAULT_HERO_IMAGE_POSITION;
+}
+
+function handleHeroImageLoad(event) {
+  const imageElement = event?.target;
+  if (!(imageElement instanceof HTMLImageElement)) {
+    return;
+  }
+
+  const imageURL = String(randomCurrent.value?.imageUrl || imageElement.currentSrc || imageElement.src || "").trim();
+  if (!imageURL) {
+    return;
+  }
+
+  if (!heroFocusCache.has(imageURL)) {
+    heroFocusCache.set(imageURL, detectImageFocusPosition(imageElement));
+  }
+
+  if (String(randomCurrent.value?.imageUrl || "").trim() === imageURL) {
+    heroImageObjectPosition.value = heroFocusCache.get(imageURL) || DEFAULT_HERO_IMAGE_POSITION;
+  }
+}
+
 function formatDate(value) {
   if (!value) {
     return "-";
@@ -399,6 +562,14 @@ function handleRandomOpen() {
   openDetailModal(randomCurrent.value);
 }
 
+function handleHeroEnter(event) {
+  if (!event || event.target !== event.currentTarget) {
+    return;
+  }
+  event.preventDefault();
+  handleRandomOpen();
+}
+
 function handleKeydown(event) {
   if (event.key === "Escape" && detailVisible.value) {
     closeDetailModal();
@@ -408,6 +579,14 @@ function handleKeydown(event) {
 watch(detailVisible, (visible) => {
   document.body.classList.toggle("modal-open", visible);
 });
+
+watch(
+  () => String(randomCurrent.value?.imageUrl || "").trim(),
+  (imageURL) => {
+    syncHeroImagePosition(imageURL);
+  },
+  { immediate: true },
+);
 
 onMounted(async () => {
   document.addEventListener("keydown", handleKeydown);

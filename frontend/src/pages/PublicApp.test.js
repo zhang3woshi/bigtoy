@@ -43,4 +43,28 @@ describe("PublicApp", () => {
     expect(modal.classes("hidden")).toBe(false);
     expect(wrapper.text()).toContain("Supra");
   });
+
+  it("does not open detail modal when clicking browse-all link in hero", async () => {
+    fetchModels.mockResolvedValueOnce([
+      {
+        id: "model-1",
+        name: "Supra",
+        brand: "MatchBox",
+        imageUrl: "/uploads/model-1/cover.jpg",
+        createdAt: "2026-03-12T00:00:00.000Z",
+      },
+    ]);
+
+    const wrapper = mount(PublicApp);
+    await flushPromises();
+
+    const browseAllLink = wrapper.find(".showcase-hero-btn");
+    expect(browseAllLink.exists()).toBe(true);
+
+    await browseAllLink.trigger("click");
+    await flushPromises();
+
+    const modal = wrapper.find(".detail-modal");
+    expect(modal.classes("hidden")).toBe(true);
+  });
 });
