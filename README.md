@@ -2,6 +2,26 @@
 
 BigToy is a die-cast model gallery + admin backend.
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
+## 中文文档
+
+- 简体中文版说明： [README.zh-CN.md](./README.zh-CN.md)
+
+## Homepage Screenshots
+
+### Desktop
+
+![Homepage desktop screenshot](./docs/screenshots/home-desktop.png)
+
+### Tablet
+
+![Homepage tablet screenshot](./docs/screenshots/home-tablet.png)
+
+### Mobile
+
+![Homepage mobile screenshot](./docs/screenshots/home-mobile.png)
+
 ## Stack
 
 - Backend: Go + Beego v2
