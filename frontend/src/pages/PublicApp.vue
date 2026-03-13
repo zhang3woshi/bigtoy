@@ -185,12 +185,22 @@
                 {{ brand }}
               </option>
             </select>
-            <select v-model="sortRule" class="input" aria-label="排序规则">
-              <option value="modelCode-asc">编号（升序）</option>
-              <option value="modelCode-desc">编号（降序）</option>
-              <option value="createdAt-asc">加入时间（升序）</option>
-              <option value="createdAt-desc">加入时间（降序）</option>
-            </select>
+            <div class="sort-controls">
+              <select v-model="sortField" class="input" aria-label="排序字段">
+                <option value="createdAt">加入时间</option>
+                <option value="modelCode">编号</option>
+              </select>
+              <button
+                type="button"
+                class="sort-order-toggle"
+                :aria-label="sortDirectionAriaLabel"
+                :title="sortDirectionAriaLabel"
+                @click="toggleSortDirection"
+              >
+                <span class="sort-order-icon" aria-hidden="true">{{ sortDirectionIcon }}</span>
+                <span>{{ sortDirectionLabel }}</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -233,7 +243,8 @@ const loading = ref(true);
 const errorMessage = ref("");
 const searchQuery = ref("");
 const brandFilter = ref("all");
-const sortRule = ref("createdAt-desc");
+const sortField = ref("createdAt");
+const sortDirection = ref("desc");
 
 const detailVisible = ref(false);
 const activeDetailItem = ref(null);
@@ -263,7 +274,10 @@ const filteredModels = computed(() => {
     query: searchQuery.value,
     brand: brandFilter.value,
   });
-  return sortCollectionModels(filtered, sortRule.value);
+  return sortCollectionModels(filtered, {
+    field: sortField.value,
+    direction: sortDirection.value,
+  });
 });
 const showEmpty = computed(() => !loading.value && !errorMessage.value && filteredModels.value.length === 0);
 
@@ -370,6 +384,11 @@ const randomEmptyLabel = computed(() => {
 const heroImageStyle = computed(() => ({
   objectPosition: heroImageObjectPosition.value,
 }));
+const sortDirectionLabel = computed(() => (sortDirection.value === "desc" ? "降序" : "升序"));
+const sortDirectionIcon = computed(() => (sortDirection.value === "desc" ? "↓" : "↑"));
+const sortDirectionAriaLabel = computed(() =>
+  sortDirection.value === "desc" ? "当前降序，点击切换为升序" : "当前升序，点击切换为降序",
+);
 
 function toSafeTimestamp(value) {
   const timestamp = new Date(value).getTime();
@@ -384,45 +403,33 @@ function compareLocaleValue(left, right, direction = "asc") {
   return direction === "desc" ? -compared : compared;
 }
 
-function sortCollectionModels(items, selectedRule) {
+function sortCollectionModels(items, { field = "createdAt", direction = "desc" } = {}) {
   const values = [...(items || [])];
-  if (selectedRule === "modelCode-asc") {
+  const normalizedDirection = direction === "asc" ? "asc" : "desc";
+  if (field === "modelCode") {
     return values.sort((a, b) => {
-      const codeCompared = compareLocaleValue(a?.modelCode, b?.modelCode, "asc");
+      const codeCompared = compareLocaleValue(a?.modelCode, b?.modelCode, normalizedDirection);
       if (codeCompared !== 0) {
         return codeCompared;
       }
-      return compareLocaleValue(a?.id, b?.id, "asc");
-    });
-  }
-
-  if (selectedRule === "modelCode-desc") {
-    return values.sort((a, b) => {
-      const codeCompared = compareLocaleValue(a?.modelCode, b?.modelCode, "desc");
-      if (codeCompared !== 0) {
-        return codeCompared;
-      }
-      return compareLocaleValue(a?.id, b?.id, "desc");
-    });
-  }
-
-  if (selectedRule === "createdAt-asc") {
-    return values.sort((a, b) => {
-      const timeCompared = toSafeTimestamp(a?.createdAt) - toSafeTimestamp(b?.createdAt);
-      if (timeCompared !== 0) {
-        return timeCompared;
-      }
-      return compareLocaleValue(a?.id, b?.id, "asc");
+      return compareLocaleValue(a?.id, b?.id, normalizedDirection);
     });
   }
 
   return values.sort((a, b) => {
-    const timeCompared = toSafeTimestamp(b?.createdAt) - toSafeTimestamp(a?.createdAt);
+    const timeCompared =
+      normalizedDirection === "asc"
+        ? toSafeTimestamp(a?.createdAt) - toSafeTimestamp(b?.createdAt)
+        : toSafeTimestamp(b?.createdAt) - toSafeTimestamp(a?.createdAt);
     if (timeCompared !== 0) {
       return timeCompared;
     }
-    return compareLocaleValue(a?.id, b?.id, "desc");
+    return compareLocaleValue(a?.id, b?.id, normalizedDirection);
   });
+}
+
+function toggleSortDirection() {
+  sortDirection.value = sortDirection.value === "desc" ? "asc" : "desc";
 }
 
 function clampNumber(value, min, max) {

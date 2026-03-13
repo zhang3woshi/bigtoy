@@ -68,7 +68,7 @@ describe("PublicApp", () => {
     expect(modal.classes("hidden")).toBe(true);
   });
 
-  it("sorts collection cards by selected sort rule", async () => {
+  it("sorts collection cards by selected sort field and direction toggle", async () => {
     fetchModels.mockResolvedValueOnce([
       {
         id: "1",
@@ -99,12 +99,20 @@ describe("PublicApp", () => {
     const namesBefore = wrapper.findAll(".card-grid .model-card h3").map((node) => node.text());
     expect(namesBefore).toEqual(["Car Beta", "Car Gamma", "Car Alpha"]);
 
-    const sortSelect = wrapper.find("select[aria-label='排序规则']");
-    expect(sortSelect.exists()).toBe(true);
-    await sortSelect.setValue("modelCode-asc");
+    const sortFieldSelect = wrapper.find(".sort-controls select");
+    expect(sortFieldSelect.exists()).toBe(true);
+    await sortFieldSelect.setValue("modelCode");
     await flushPromises();
 
-    const namesAfter = wrapper.findAll(".card-grid .model-card h3").map((node) => node.text());
-    expect(namesAfter).toEqual(["Car Gamma", "Car Alpha", "Car Beta"]);
+    const namesAfterFieldChanged = wrapper.findAll(".card-grid .model-card h3").map((node) => node.text());
+    expect(namesAfterFieldChanged).toEqual(["Car Beta", "Car Alpha", "Car Gamma"]);
+
+    const directionButton = wrapper.find(".sort-order-toggle");
+    expect(directionButton.exists()).toBe(true);
+    await directionButton.trigger("click");
+    await flushPromises();
+
+    const namesAfterDirectionToggle = wrapper.findAll(".card-grid .model-card h3").map((node) => node.text());
+    expect(namesAfterDirectionToggle).toEqual(["Car Gamma", "Car Alpha", "Car Beta"]);
   });
 });
