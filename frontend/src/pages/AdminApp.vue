@@ -6,7 +6,6 @@
     </div>
     <div class="topbar-nav">
       <a class="nav-link" href="/index.html">展厅首页</a>
-      <a class="nav-link" href="/model.html">详情页</a>
       <button type="button" class="btn-secondary nav-btn" :disabled="logoutPending" @click="handleLogout">
         退出登录
       </button>
