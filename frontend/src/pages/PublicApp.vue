@@ -4,14 +4,21 @@
       <a class="showcase-brand" href="/index.html" aria-label="返回首页">
         <span class="showcase-brand-icon" aria-hidden="true">
           <svg viewBox="0 0 48 48" focusable="false">
-            <path d="M10 28.5h28v6H10z" />
-            <path d="M13 28.5l4.2-8.5h13.6l4.2 8.5z" />
-            <circle cx="16.5" cy="36.5" r="3.4" />
-            <circle cx="31.5" cy="36.5" r="3.4" />
+            <path fill="#ffad4d" d="M24 4 39 12.5V35.5L24 44 9 35.5V12.5L24 4Z" />
+            <path
+              fill="#1f334f"
+              d="M13.7 28.8h20.6c1.2 0 2.1-1.1 1.7-2.2l-1.5-4.2a2.5 2.5 0 0 0-2.4-1.7h-4l-2.5-3.9h-5.5l-2.3 3.9h-1.9a2.5 2.5 0 0 0-2.4 1.7L12 26.6c-.4 1.1.5 2.2 1.7 2.2Z"
+            />
+            <path fill="#ffd8a5" d="M18.2 23.6h10.2L25.8 20h-5.5z" />
+            <circle cx="17.5" cy="31.4" r="3.2" fill="#14243a" />
+            <circle cx="30.5" cy="31.4" r="3.2" fill="#14243a" />
+            <circle cx="17.5" cy="31.4" r="1.4" fill="#f8ead5" />
+            <circle cx="30.5" cy="31.4" r="1.4" fill="#f8ead5" />
+            <path fill="#ffe8bf" d="m35.2 10.1 1.2 2.6 2.8.4-2 2 .5 2.8-2.5-1.4-2.6 1.4.5-2.8-2-2 2.8-.4z" />
           </svg>
         </span>
         <span class="showcase-brand-copy">
-          <strong>Zhangyu Diecast Collection</strong>
+          <strong>zhang3woshi Diecast Collection</strong>
           <small>火柴盒与风火轮车模收藏</small>
         </span>
       </a>
@@ -52,7 +59,7 @@
           <div class="showcase-hero-mask"></div>
 
           <div class="showcase-hero-content">
-            <p class="showcase-hero-kicker">Zhangyu Diecast Collection</p>
+            <p class="showcase-hero-kicker">zhang3woshi Diecast Collection</p>
             <h1 class="showcase-hero-title">火柴盒 & 风火轮车模收藏</h1>
             <p class="showcase-hero-meta">
               收藏总量 <strong>{{ totalCount }}</strong> 台
@@ -214,7 +221,7 @@
     </main>
 
     <footer class="showcase-footer">
-      <p class="showcase-footer-brand">Zhangyu Diecast Collection</p>
+      <p class="showcase-footer-brand">zhang3woshi Diecast Collection</p>
       <p>收藏起始 {{ timelineStartYear }} · 当前总数 {{ totalCount }}</p>
       <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">浙ICP备2022001311号-1</a>
     </footer>

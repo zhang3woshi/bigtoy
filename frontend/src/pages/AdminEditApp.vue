@@ -1,7 +1,7 @@
 ﻿<template>
   <header class="topbar">
     <div class="brand-block">
-      <p class="brand-kicker">Zhangyu Diecast Collection</p>
+      <p class="brand-kicker">zhang3woshi Diecast Collection</p>
       <h1 class="brand-title">车型编辑</h1>
     </div>
     <div class="topbar-nav">
