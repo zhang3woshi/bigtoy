@@ -134,6 +134,41 @@
     </section>
 
     <section class="panel">
+      <h2>数据备份</h2>
+      <p class="panel-hint">导出内容为数据库文件 + 图片目录的 ZIP 包；导入 ZIP 后会覆盖云端当前数据。</p>
+
+      <div class="backup-tools">
+        <div class="backup-row">
+          <button type="button" class="btn-inline" :disabled="backupPending" @click="handleExportBackup">
+            下载当前备份
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            :disabled="backupPending || !backupFile"
+            @click="handleImportBackup"
+          >
+            导入并覆盖
+          </button>
+        </div>
+
+        <label class="backup-file-picker">
+          选择备份文件（ZIP）
+          <input
+            ref="backupFileInputRef"
+            type="file"
+            accept="application/zip,.zip"
+            class="input"
+            :disabled="backupPending"
+            @change="handleBackupFileChange"
+          />
+        </label>
+
+        <p v-if="backupFileName" class="backup-file-name">已选择：{{ backupFileName }}</p>
+      </div>
+
+      <p class="form-status" :class="backupStatusClass" role="status" aria-live="polite">{{ backupStatusMessage }}</p>
+
       <h2>车型列表</h2>
       <p v-if="loadingRecent" class="muted">正在加载车型列表...</p>
       <p v-if="listError" class="state-error">{{ listError }}</p>
@@ -198,31 +233,38 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
-import { createModel, deleteModel, fetchAuthState, fetchModels, logout } from "../js/api.js";
+import { createModel, deleteModel, exportBackup, fetchAuthState, fetchModels, importBackup, logout } from "../js/api.js";
 import { getModelCodeLabel, sortByLatest } from "../utils/model.js";
 
 const pageSize = 10;
 
 const coverInputRef = ref(null);
 const galleryInputRef = ref(null);
+const backupFileInputRef = ref(null);
 
 const currentModels = ref([]);
 const currentPage = ref(1);
 const imageFile = ref(null);
 const galleryFiles = ref([]);
+const backupFile = ref(null);
 
 const loadingRecent = ref(false);
 const listError = ref("");
 const submitPending = ref(false);
+const backupPending = ref(false);
 const logoutPending = ref(false);
 const deletingModelID = ref(null);
 
 const statusMessage = ref("");
 const statusKind = ref("info");
+const backupStatusMessage = ref("");
+const backupStatusKind = ref("info");
 
 const form = reactive(createInitialForm());
 
 const statusClass = computed(() => `form-status-${statusKind.value}`);
+const backupStatusClass = computed(() => `form-status-${backupStatusKind.value}`);
+const backupFileName = computed(() => String(backupFile.value?.name || "").trim());
 
 const totalPages = computed(() => Math.max(1, Math.ceil(currentModels.value.length / pageSize)));
 const showPagination = computed(() => currentModels.value.length > pageSize);
@@ -267,8 +309,17 @@ function setStatus(message, kind = "info") {
   statusKind.value = kind;
 }
 
+function setBackupStatus(message, kind = "info") {
+  backupStatusMessage.value = message;
+  backupStatusKind.value = kind;
+}
+
 function redirectToLogin() {
   window.location.replace("/login.html");
+}
+
+function isAuthenticationError(error) {
+  return /authentication required/i.test(String(error?.message || ""));
 }
 
 function clearFileInputs() {
@@ -279,6 +330,13 @@ function clearFileInputs() {
   }
   if (galleryInputRef.value) {
     galleryInputRef.value.value = "";
+  }
+}
+
+function clearBackupInput() {
+  backupFile.value = null;
+  if (backupFileInputRef.value) {
+    backupFileInputRef.value.value = "";
   }
 }
 
@@ -302,6 +360,15 @@ function handleCoverFileChange(event) {
 
 function handleGalleryFilesChange(event) {
   galleryFiles.value = event.target.files ? Array.from(event.target.files) : [];
+}
+
+function handleBackupFileChange(event) {
+  backupFile.value = event.target.files?.[0] || null;
+  if (backupFile.value) {
+    setBackupStatus(`已选择备份文件：${backupFile.value.name}`, "info");
+  } else {
+    setBackupStatus("");
+  }
 }
 
 function buildPayloadFormData() {
@@ -403,7 +470,7 @@ async function handleSubmit() {
     resetForm();
     await refreshRecent();
   } catch (error) {
-    if (/authentication required/i.test(String(error.message || ""))) {
+    if (isAuthenticationError(error)) {
       redirectToLogin();
       return;
     }
@@ -432,13 +499,75 @@ async function handleDelete(item) {
     setStatus("删除成功。", "success");
     await refreshRecent();
   } catch (error) {
-    if (/authentication required/i.test(String(error.message || ""))) {
+    if (isAuthenticationError(error)) {
       redirectToLogin();
       return;
     }
     setStatus(`删除失败：${error.message}`, "error");
   } finally {
     deletingModelID.value = null;
+  }
+}
+
+async function handleExportBackup() {
+  backupPending.value = true;
+  setBackupStatus("正在生成并下载 ZIP 备份，请稍候...", "info");
+
+  try {
+    const { blob, fileName } = await exportBackup();
+    const objectURL = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectURL;
+    anchor.download = fileName || "backup.zip";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectURL);
+
+    setBackupStatus("备份下载成功。", "success");
+  } catch (error) {
+    if (isAuthenticationError(error)) {
+      redirectToLogin();
+      return;
+    }
+    setBackupStatus(`备份下载失败：${error.message}`, "error");
+  } finally {
+    backupPending.value = false;
+  }
+}
+
+async function handleImportBackup() {
+  if (!backupFile.value) {
+    setBackupStatus("请先选择备份文件。", "error");
+    return;
+  }
+
+  const confirmed = window.confirm("导入 ZIP 会覆盖当前云端车型与图片数据，确认继续吗？");
+  if (!confirmed) {
+    return;
+  }
+
+  backupPending.value = true;
+  setBackupStatus("正在导入 ZIP 备份并还原数据，请稍候...", "info");
+
+  try {
+    const result = await importBackup(backupFile.value);
+    const restored = Boolean(result?.restored);
+    if (restored) {
+      setBackupStatus("导入成功，数据已还原。建议重启服务后再次检查展示页。", "success");
+    } else {
+      setBackupStatus("导入完成。建议重启服务后再次检查展示页。", "success");
+    }
+    clearBackupInput();
+    await refreshRecent();
+  } catch (error) {
+    if (isAuthenticationError(error)) {
+      redirectToLogin();
+      return;
+    }
+    setBackupStatus(`备份导入失败：${error.message}`, "error");
+  } finally {
+    backupPending.value = false;
   }
 }
 
@@ -459,6 +588,7 @@ onMounted(async () => {
     return;
   }
   resetForm();
+  clearBackupInput();
   await refreshRecent();
 });
 </script>

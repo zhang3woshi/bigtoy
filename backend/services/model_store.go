@@ -102,6 +102,39 @@ func (s *ModelStore) List() []models.CarModel {
 	return items
 }
 
+func (s *ModelStore) ReplaceAll(rawItems []models.CarModel) (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin import transaction: %w", err)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM car_models`); err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("clear existing models: %w", err)
+	}
+
+	usedIDs := make(map[string]struct{}, len(rawItems))
+	for index, rawItem := range rawItems {
+		item := normalizeLegacyItem(rawItem)
+		if item.Name == "" {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("model #%d name is required", index+1)
+		}
+		item.ID = allocateLegacyID(item.ID, usedIDs)
+
+		if err := insertLegacyModelTx(tx, item); err != nil {
+			_ = tx.Rollback()
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit import transaction: %w", err)
+	}
+
+	return len(rawItems), nil
+}
+
 func (s *ModelStore) Add(req models.CreateModelRequest) (models.CarModel, error) {
 	return s.add(req, nil, nil)
 }

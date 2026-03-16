@@ -176,6 +176,87 @@ func TestModelStoreLegacySeedImport(t *testing.T) {
 	}
 }
 
+func TestModelStoreReplaceAll(t *testing.T) {
+	store := newModelStoreForTest(t, "")
+
+	_, err := store.Add(models.CreateModelRequest{Name: "Original 1", Year: 2020})
+	if err != nil {
+		t.Fatalf("seed original model 1: %v", err)
+	}
+	_, err = store.Add(models.CreateModelRequest{Name: "Original 2", Year: 2021})
+	if err != nil {
+		t.Fatalf("seed original model 2: %v", err)
+	}
+
+	now := time.Now().UTC()
+	imported := []models.CarModel{
+		{
+			ID:        uuid.NewString(),
+			Name:      "Imported Skyline",
+			Brand:     "Nissan",
+			Year:      1999,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:   "legacy-id",
+			Name: "Imported Supra",
+			Year: -9,
+		},
+		{
+			ID:   "legacy-id",
+			Name: "Imported NSX",
+			Year: 2003,
+		},
+	}
+
+	replacedCount, err := store.ReplaceAll(imported)
+	if err != nil {
+		t.Fatalf("replace all models: %v", err)
+	}
+	if replacedCount != 3 {
+		t.Fatalf("expected replaced count 3, got %d", replacedCount)
+	}
+
+	items := store.List()
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items after replace all, got %d", len(items))
+	}
+
+	ids := make(map[string]struct{}, len(items))
+	nameToItem := make(map[string]models.CarModel, len(items))
+	for _, item := range items {
+		if _, err := uuid.Parse(item.ID); err != nil {
+			t.Fatalf("expected uuid id after replace, got %q", item.ID)
+		}
+		if _, exists := ids[item.ID]; exists {
+			t.Fatalf("duplicate id after replace all: %s", item.ID)
+		}
+		ids[item.ID] = struct{}{}
+		nameToItem[item.Name] = item
+	}
+
+	if _, ok := nameToItem["Original 1"]; ok {
+		t.Fatal("expected previous models to be removed by replace all")
+	}
+	if _, ok := nameToItem["Imported Skyline"]; !ok {
+		t.Fatal("missing imported model: Imported Skyline")
+	}
+	if supra, ok := nameToItem["Imported Supra"]; !ok {
+		t.Fatal("missing imported model: Imported Supra")
+	} else if supra.Year != 0 {
+		t.Fatalf("expected imported negative year to normalize to 0, got %d", supra.Year)
+	}
+
+	_, err = store.ReplaceAll([]models.CarModel{{Name: "   "}})
+	if err == nil {
+		t.Fatal("expected replace all validation error for blank model name")
+	}
+	if len(store.List()) != 3 {
+		t.Fatal("replace all should rollback on validation error")
+	}
+}
+
 func TestPrepareModelWriteStateValidation(t *testing.T) {
 	_, _, err := prepareModelWriteState(models.CreateModelRequest{Name: "   "})
 	if err == nil {

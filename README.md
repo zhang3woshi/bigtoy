@@ -298,6 +298,8 @@ Important:
 - `POST /api/models` (auth required)
 - `PUT /api/models/:id` (auth required)
 - `DELETE /api/models/:id` (auth required)
+- `GET /api/backup/export` (auth required, download ZIP backup: db + images)
+- `POST /api/backup/import` (auth required, import ZIP backup and restore db + images)
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`

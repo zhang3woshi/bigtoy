@@ -1,6 +1,31 @@
-﻿const DEFAULT_API_BASE = import.meta.env.DEV ? "http://localhost:8080" : window.location.origin;
+const DEFAULT_API_BASE = import.meta.env.DEV ? "http://localhost:8080" : window.location.origin;
 const API_BASE = (import.meta.env.VITE_API_BASE || DEFAULT_API_BASE).replace(/\/$/, "");
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseDownloadFileName(contentDisposition, fallback) {
+  const headerText = String(contentDisposition || "");
+
+  const utf8Match = headerText.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch (_error) {
+      return utf8Match[1].trim();
+    }
+  }
+
+  const quotedMatch = headerText.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1].trim();
+  }
+
+  const plainMatch = headerText.match(/filename\s*=\s*([^;]+)/i);
+  if (plainMatch?.[1]) {
+    return plainMatch[1].trim();
+  }
+
+  return fallback;
+}
 
 async function parseJSONResponse(response) {
   const payload = await response.json().catch(() => ({}));
@@ -131,4 +156,46 @@ export async function fetchAuthState() {
 
   const payload = await parseJSONResponse(response);
   return payload.data || { authenticated: false };
+}
+
+export async function exportBackup() {
+  const response = await fetch(`${API_BASE}/api/backup/export`, {
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const message = payload?.error || `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const fallbackName = `backup_${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "")}.zip`;
+  const fileName = parseDownloadFileName(response.headers.get("Content-Disposition"), fallbackName);
+
+  return { blob, fileName };
+}
+
+export async function importBackup(file) {
+  if (!file) {
+    throw new Error("backup file is required");
+  }
+
+  const payload = new FormData();
+  payload.set("file", file);
+
+  const response = await fetch(`${API_BASE}/api/backup/import`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+    body: payload,
+  });
+
+  const result = await parseJSONResponse(response);
+  return result.data || { imported: 0 };
 }

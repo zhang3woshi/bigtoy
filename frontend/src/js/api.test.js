@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createModel,
   deleteModel,
+  exportBackup,
   fetchAuthState,
   fetchModels,
+  importBackup,
   login,
   logout,
   updateModel,
@@ -165,5 +167,56 @@ describe("api client", () => {
   it("returns fallback auth state when payload has no data", async () => {
     globalThis.fetch.mockResolvedValueOnce(jsonResponse({}));
     await expect(fetchAuthState()).resolves.toEqual({ authenticated: false });
+  });
+
+  it("exports backup and resolves filename from response header", async () => {
+    globalThis.fetch.mockResolvedValueOnce(
+      new Response("zip-content", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": 'attachment; filename="backup_test.zip"',
+        },
+      }),
+    );
+
+    const result = await exportBackup();
+
+    expect(result.fileName).toBe("backup_test.zip");
+    expect(result.blob).toEqual(
+      expect.objectContaining({
+        size: expect.any(Number),
+        type: "application/zip",
+      }),
+    );
+    expect(result.blob.size).toBeGreaterThan(0);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/backup\/export$/),
+      expect.objectContaining({
+        credentials: "include",
+      }),
+    );
+  });
+
+  it("imports backup file with multipart request", async () => {
+    globalThis.fetch.mockResolvedValueOnce(jsonResponse({ data: { restored: true, restartRecommended: true } }));
+
+    const file = new File(["zip-content"], "backup.zip", { type: "application/zip" });
+    const result = await importBackup(file);
+
+    expect(result).toEqual({ restored: true, restartRecommended: true });
+    const [, options] = globalThis.fetch.mock.calls[0];
+    expect(options).toEqual(
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.body.get("file")).toBe(file);
+  });
+
+  it("rejects backup import when file is missing", async () => {
+    await expect(importBackup(null)).rejects.toThrow("backup file is required");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

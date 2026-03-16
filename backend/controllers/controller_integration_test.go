@@ -1,17 +1,23 @@
 package controllers
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/beego/beego/v2/server/web/context"
 	"github.com/google/uuid"
 
+	"bigtoy/backend/models"
 	"bigtoy/backend/services"
 )
 
@@ -33,9 +39,12 @@ func setupControllerDeps(t *testing.T) (token string, cookieName string) {
 	}
 
 	root := t.TempDir()
+	dbPath := filepath.Join(root, "data", "models.db")
+	imagesRoot := filepath.Join(root, "images")
+	backupDir := filepath.Join(root, "backup")
 	store, err := services.NewModelStore(
-		filepath.Join(root, "data", "models.db"),
-		filepath.Join(root, "images"),
+		dbPath,
+		imagesRoot,
 		"",
 	)
 	if err != nil {
@@ -44,10 +53,20 @@ func setupControllerDeps(t *testing.T) (token string, cookieName string) {
 
 	SetAuthService(auth)
 	SetModelStore(store)
+	SetBackupRuntimeConfig(BackupRuntimeConfig{
+		DBPath:         dbPath,
+		ImagesRoot:     imagesRoot,
+		BackupDir:      backupDir,
+		LegacyDataPath: "",
+	})
 	t.Cleanup(func() {
 		SetAuthService(nil)
+		currentStore := modelStore
 		SetModelStore(nil)
-		_ = store.Close()
+		SetBackupRuntimeConfig(BackupRuntimeConfig{})
+		if currentStore != nil {
+			_ = currentStore.Close()
+		}
 	})
 
 	token, _, err = auth.Login("127.0.0.1", "admin", "Secret#12345")
@@ -78,6 +97,25 @@ func decodeJSONBody(t *testing.T, recorder *httptest.ResponseRecorder) map[strin
 		t.Fatalf("decode json body: %v; body=%s", err, recorder.Body.String())
 	}
 	return payload
+}
+
+func newMultipartContext(t *testing.T, method, target, fieldName, fileName string, content []byte) (*context.Context, *httptest.ResponseRecorder) {
+	t.Helper()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fileWriter, err := writer.CreateFormFile(fieldName, fileName)
+	if err != nil {
+		t.Fatalf("create multipart file: %v", err)
+	}
+	if _, err := fileWriter.Write(content); err != nil {
+		t.Fatalf("write multipart file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	return newControllerContext(method, target, body.Bytes(), writer.FormDataContentType())
 }
 
 func TestAuthControllerLoginLogoutAndMe(t *testing.T) {
@@ -135,6 +173,119 @@ func TestAuthControllerLoginLogoutAndMe(t *testing.T) {
 	logoutController.Logout()
 	if logoutRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 for logout, got %d", logoutRecorder.Code)
+	}
+}
+
+func TestBackupControllerExportAndImportFlow(t *testing.T) {
+	token, cookieName := setupControllerDeps(t)
+
+	if _, err := modelStore.Add(models.CreateModelRequest{Name: "Export A", Year: 2020}); err != nil {
+		t.Fatalf("seed export model A: %v", err)
+	}
+	if _, err := modelStore.Add(models.CreateModelRequest{Name: "Export B", Year: 2021}); err != nil {
+		t.Fatalf("seed export model B: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(backupRuntimeConfig.ImagesRoot, "before"), 0o755); err != nil {
+		t.Fatalf("create source image dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(backupRuntimeConfig.ImagesRoot, "before", "keep.png"), []byte("keep"), 0o644); err != nil {
+		t.Fatalf("write source image file: %v", err)
+	}
+
+	unauthorizedExportCtx, unauthorizedExportRecorder := newControllerContext(http.MethodGet, "/api/backup/export", nil, "")
+	unauthorizedExport := &BackupController{}
+	unauthorizedExport.Init(unauthorizedExportCtx, "BackupController", "Export", nil)
+	unauthorizedExport.Export()
+	if unauthorizedExportRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthorized backup export, got %d", unauthorizedExportRecorder.Code)
+	}
+
+	exportCtx, exportRecorder := newControllerContext(http.MethodGet, "/api/backup/export", nil, "")
+	exportCtx.Request.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+	exportController := &BackupController{}
+	exportController.Init(exportCtx, "BackupController", "Export", nil)
+	exportController.Export()
+	if exportRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for backup export, got %d body=%s", exportRecorder.Code, exportRecorder.Body.String())
+	}
+	if got := exportRecorder.Header().Get("Content-Type"); !strings.Contains(strings.ToLower(got), "application/zip") {
+		t.Fatalf("expected zip content-type, got %q", got)
+	}
+	if exportRecorder.Header().Get("Content-Disposition") == "" {
+		t.Fatal("expected Content-Disposition header in export response")
+	}
+
+	exportReader, err := zip.NewReader(bytes.NewReader(exportRecorder.Body.Bytes()), int64(exportRecorder.Body.Len()))
+	if err != nil {
+		t.Fatalf("decode exported zip: %v", err)
+	}
+	exportedEntries := make([]string, 0, len(exportReader.File))
+	for _, file := range exportReader.File {
+		exportedEntries = append(exportedEntries, file.Name)
+	}
+	if !slices.Contains(exportedEntries, "db/models.db") {
+		t.Fatalf("expected exported zip to contain db/models.db, got %#v", exportedEntries)
+	}
+	if !slices.Contains(exportedEntries, "images/before/keep.png") {
+		t.Fatalf("expected exported zip to contain images/before/keep.png, got %#v", exportedEntries)
+	}
+
+	if _, err := modelStore.Add(models.CreateModelRequest{Name: "Export C", Year: 2022}); err != nil {
+		t.Fatalf("seed extra model before import: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(backupRuntimeConfig.ImagesRoot, "after"), 0o755); err != nil {
+		t.Fatalf("create extra image dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(backupRuntimeConfig.ImagesRoot, "after", "drop.png"), []byte("drop"), 0o644); err != nil {
+		t.Fatalf("write extra image file: %v", err)
+	}
+	if got := len(modelStore.List()); got != 3 {
+		t.Fatalf("expected 3 models before import restore, got %d", got)
+	}
+
+	unauthorizedImportCtx, unauthorizedImportRecorder := newMultipartContext(t, http.MethodPost, "/api/backup/import", "file", "backup.zip", exportRecorder.Body.Bytes())
+	unauthorizedImport := &BackupController{}
+	unauthorizedImport.Init(unauthorizedImportCtx, "BackupController", "Import", nil)
+	unauthorizedImport.Import()
+	if unauthorizedImportRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthorized backup import, got %d", unauthorizedImportRecorder.Code)
+	}
+
+	importCtx, importRecorder := newMultipartContext(t, http.MethodPost, "/api/backup/import", "file", "backup.zip", exportRecorder.Body.Bytes())
+	importCtx.Request.AddCookie(&http.Cookie{Name: cookieName, Value: token})
+	importController := &BackupController{}
+	importController.Init(importCtx, "BackupController", "Import", nil)
+	importController.Import()
+	if importRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for backup import, got %d body=%s", importRecorder.Code, importRecorder.Body.String())
+	}
+
+	importedPayload := decodeJSONBody(t, importRecorder)
+	importedData, ok := importedPayload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("invalid backup import response payload: %#v", importedPayload)
+	}
+	if restored, ok := importedData["restored"].(bool); !ok || !restored {
+		t.Fatalf("expected restored=true, got %#v", importedData["restored"])
+	}
+
+	items := modelStore.List()
+	if len(items) != 2 {
+		t.Fatalf("expected 2 models after backup restore, got %d", len(items))
+	}
+	names := []string{items[0].Name, items[1].Name}
+	if !slices.Contains(names, "Export A") || !slices.Contains(names, "Export B") {
+		t.Fatalf("expected restored model names Export A and Export B, got %#v", names)
+	}
+	if slices.Contains(names, "Export C") {
+		t.Fatalf("unexpected stale model remains after restore: %#v", names)
+	}
+
+	if _, err := os.Stat(filepath.Join(backupRuntimeConfig.ImagesRoot, "before", "keep.png")); err != nil {
+		t.Fatalf("expected restored image keep.png to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(backupRuntimeConfig.ImagesRoot, "after", "drop.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale image drop.png to be removed, got err=%v", err)
 	}
 }
 

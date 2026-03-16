@@ -29,6 +29,7 @@ func Register() error {
 	dbPath := filepath.Join(dataDir, "models.db")
 	legacyDataPath := filepath.Join(dataDir, "models.json")
 	uploadsPath := filepath.Join(dataDir, "images")
+	backupDir := filepath.Join(dataDir, "backup")
 	viewsPath := resolveViewsPath(backendRoot)
 
 	if err := applyTransportSecurityConfig(); err != nil {
@@ -40,8 +41,14 @@ func Register() error {
 		return fmt.Errorf("failed to initialize model store: %w", err)
 	}
 	controllers.SetModelStore(store)
+	controllers.SetBackupRuntimeConfig(controllers.BackupRuntimeConfig{
+		DBPath:         dbPath,
+		ImagesRoot:     uploadsPath,
+		BackupDir:      backupDir,
+		LegacyDataPath: legacyDataPath,
+	})
 
-	if err := startBackupScheduler(dbPath, uploadsPath, filepath.Join(dataDir, "backup")); err != nil {
+	if err := startBackupScheduler(dbPath, uploadsPath, backupDir); err != nil {
 		return fmt.Errorf("failed to initialize backup scheduler: %w", err)
 	}
 
@@ -59,6 +66,8 @@ func Register() error {
 
 	web.Router("/api/models", &controllers.ModelController{})
 	web.Router("/api/models/:id", &controllers.ModelController{}, "put:Put;delete:Delete")
+	web.Router("/api/backup/export", &controllers.BackupController{}, "get:Export")
+	web.Router("/api/backup/import", &controllers.BackupController{}, "post:Import")
 	web.Router("/api/auth/login", &controllers.AuthController{}, "post:Login")
 	web.Router("/api/auth/logout", &controllers.AuthController{}, "post:Logout")
 	web.Router("/api/auth/me", &controllers.AuthController{}, "get:Me")

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"bigtoy/backend/models"
 )
 
 func managedBackupFiles(t *testing.T, dir string) []string {
@@ -146,6 +148,48 @@ func TestCreateBackupZipIncludesExpectedEntries(t *testing.T) {
 		if !slices.Contains(names, name) {
 			t.Fatalf("missing archive entry %q in %#v", name, names)
 		}
+	}
+}
+
+func TestCreateBackupArchiveReturnsCreatedFilePath(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "data", "models.db")
+	imagesRoot := filepath.Join(tmp, "images")
+	backupDir := filepath.Join(tmp, "backup")
+
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatalf("create db parent dir: %v", err)
+	}
+	if err := os.MkdirAll(imagesRoot, 0o755); err != nil {
+		t.Fatalf("create images dir: %v", err)
+	}
+	if err := os.WriteFile(dbPath, []byte("sqlite-data"), 0o644); err != nil {
+		t.Fatalf("write db file: %v", err)
+	}
+
+	service, err := NewBackupService(BackupServiceConfig{
+		DBPath:     dbPath,
+		ImagesRoot: imagesRoot,
+		BackupDir:  backupDir,
+		Interval:   time.Minute,
+		MaxBackups: 3,
+	})
+	if err != nil {
+		t.Fatalf("new backup service: %v", err)
+	}
+
+	archivePath, err := service.CreateBackupArchive()
+	if err != nil {
+		t.Fatalf("create backup archive: %v", err)
+	}
+	if strings.TrimSpace(archivePath) == "" {
+		t.Fatal("expected non-empty archive path")
+	}
+	if filepath.Ext(archivePath) != ".zip" {
+		t.Fatalf("expected zip archive path, got %s", archivePath)
+	}
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Fatalf("expected created archive file to exist: %v", err)
 	}
 }
 
@@ -359,5 +403,138 @@ func TestWriteBackupZipFailsWhenImagesDirectoryIsMissing(t *testing.T) {
 	archivePath := filepath.Join(tmp, "archive.zip")
 	if err := service.writeBackupZip(archivePath); err == nil {
 		t.Fatal("expected writeBackupZip to fail when images directory is missing")
+	}
+}
+
+func TestRestoreBackupArchiveRestoresDatabaseAndImages(t *testing.T) {
+	tmp := t.TempDir()
+
+	sourceRoot := filepath.Join(tmp, "source")
+	sourceDB := filepath.Join(sourceRoot, "models.db")
+	sourceImages := filepath.Join(sourceRoot, "images")
+	sourceBackupDir := filepath.Join(sourceRoot, "backup")
+
+	sourceStore, err := NewModelStore(sourceDB, sourceImages, "")
+	if err != nil {
+		t.Fatalf("create source model store: %v", err)
+	}
+	t.Cleanup(func() { _ = sourceStore.Close() })
+
+	if _, err := sourceStore.Add(models.CreateModelRequest{Name: "Source Model", Year: 2024}); err != nil {
+		t.Fatalf("insert source model: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(sourceImages, "source-only"), 0o755); err != nil {
+		t.Fatalf("create source image dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceImages, "source-only", "cover.png"), []byte("source"), 0o644); err != nil {
+		t.Fatalf("write source image: %v", err)
+	}
+
+	sourceBackupService, err := NewBackupService(BackupServiceConfig{
+		DBPath:     sourceDB,
+		ImagesRoot: sourceImages,
+		BackupDir:  sourceBackupDir,
+		Interval:   time.Minute,
+		MaxBackups: 3,
+	})
+	if err != nil {
+		t.Fatalf("create source backup service: %v", err)
+	}
+	archivePath, err := sourceBackupService.CreateBackupArchive()
+	if err != nil {
+		t.Fatalf("create source backup archive: %v", err)
+	}
+
+	targetRoot := filepath.Join(tmp, "target")
+	targetDB := filepath.Join(targetRoot, "models.db")
+	targetImages := filepath.Join(targetRoot, "images")
+	targetStore, err := NewModelStore(targetDB, targetImages, "")
+	if err != nil {
+		t.Fatalf("create target model store: %v", err)
+	}
+	if _, err := targetStore.Add(models.CreateModelRequest{Name: "Target Model", Year: 2001}); err != nil {
+		t.Fatalf("insert target model: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(targetImages, "target-only"), 0o755); err != nil {
+		t.Fatalf("create target image dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(targetImages, "target-only", "cover.png"), []byte("target"), 0o644); err != nil {
+		t.Fatalf("write target image: %v", err)
+	}
+	if err := targetStore.Close(); err != nil {
+		t.Fatalf("close target model store: %v", err)
+	}
+
+	restoreService, err := NewBackupService(BackupServiceConfig{
+		DBPath:     targetDB,
+		ImagesRoot: targetImages,
+		BackupDir:  filepath.Join(targetRoot, "backup"),
+		Interval:   time.Minute,
+		MaxBackups: 3,
+	})
+	if err != nil {
+		t.Fatalf("create restore backup service: %v", err)
+	}
+
+	if err := restoreService.RestoreBackupArchive(archivePath); err != nil {
+		t.Fatalf("restore backup archive: %v", err)
+	}
+
+	restoredStore, err := NewModelStore(targetDB, targetImages, "")
+	if err != nil {
+		t.Fatalf("reopen restored model store: %v", err)
+	}
+	defer restoredStore.Close()
+
+	items := restoredStore.List()
+	if len(items) != 1 {
+		t.Fatalf("expected 1 restored model, got %d", len(items))
+	}
+	if items[0].Name != "Source Model" {
+		t.Fatalf("expected restored source model, got %#v", items[0])
+	}
+
+	if _, err := os.Stat(filepath.Join(targetImages, "source-only", "cover.png")); err != nil {
+		t.Fatalf("expected source image file to exist after restore: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(targetImages, "target-only", "cover.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected target-only image to be replaced, got err=%v", err)
+	}
+}
+
+func TestRestoreBackupArchiveRejectsInvalidArchive(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "models.db")
+	imagesRoot := filepath.Join(tmp, "images")
+	backupDir := filepath.Join(tmp, "backup")
+
+	if err := os.MkdirAll(imagesRoot, 0o755); err != nil {
+		t.Fatalf("create images root: %v", err)
+	}
+	if err := os.WriteFile(dbPath, []byte("db"), 0o644); err != nil {
+		t.Fatalf("write db file: %v", err)
+	}
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		t.Fatalf("create backup dir: %v", err)
+	}
+
+	badArchivePath := filepath.Join(backupDir, "invalid.zip")
+	if err := os.WriteFile(badArchivePath, []byte("not-a-zip"), 0o644); err != nil {
+		t.Fatalf("write invalid archive: %v", err)
+	}
+
+	service, err := NewBackupService(BackupServiceConfig{
+		DBPath:     dbPath,
+		ImagesRoot: imagesRoot,
+		BackupDir:  backupDir,
+		Interval:   time.Minute,
+		MaxBackups: 3,
+	})
+	if err != nil {
+		t.Fatalf("create backup service: %v", err)
+	}
+
+	if err := service.RestoreBackupArchive(badArchivePath); err == nil {
+		t.Fatal("expected restore to fail for invalid archive file")
 	}
 }
