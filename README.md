@@ -74,7 +74,7 @@ go mod tidy
 go run main.go
 ```
 
-Backend default: `http://localhost:8080`
+Backend default: `http://localhost:11000`
 
 ### Frontend dev
 
@@ -259,7 +259,7 @@ prod::force_https = true
 prod::enablehttp = false
 prod::enablehttps = true
 prod::httpsaddr = 0.0.0.0
-prod::httpsport = 443
+prod::httpsport = 11001
 prod::https_cert_file = conf/certs/fullchain.pem
 prod::https_key_file = conf/certs/privkey.pem
 prod::auth_secure_cookie = true
@@ -279,7 +279,7 @@ Then replace certificate paths with your real files.
 $env:BIGTOY_FORCE_HTTPS="true"
 $env:BIGTOY_ENABLE_HTTP="false"
 $env:BIGTOY_ENABLE_HTTPS="true"
-$env:BIGTOY_HTTPS_PORT="443"
+$env:BIGTOY_HTTPS_PORT="11001"
 $env:BIGTOY_HTTPS_CERT_FILE="C:\path\to\fullchain.pem"
 $env:BIGTOY_HTTPS_KEY_FILE="C:\path\to\privkey.pem"
 $env:BIGTOY_AUTH_SECURE_COOKIE="true"

@@ -42,7 +42,7 @@ go mod tidy
 go run main.go
 ```
 
-默认地址：`http://localhost:8080`
+默认地址：`http://localhost:11000`
 
 ### 前端开发模式
 

@@ -18,6 +18,11 @@ import (
 
 var backupScheduler *services.BackupService
 
+const (
+	defaultHTTPPort  = 11000
+	defaultHTTPSPort = 11001
+)
+
 func Register() error {
 	backendRoot := resolveBackendRoot()
 	dataDir := filepath.Join(backendRoot, "data")
@@ -105,12 +110,17 @@ func applyTransportSecurityConfig() error {
 	web.BConfig.Listen.EnableHTTP = enableHTTP
 	web.BConfig.Listen.EnableHTTPS = enableHTTPS
 
+	httpPort := readEnvOrConfigInt("BIGTOY_HTTP_PORT", "httpport", defaultHTTPPort)
+	if httpPort > 0 {
+		web.BConfig.Listen.HTTPPort = httpPort
+	}
+
 	httpsAddr := strings.TrimSpace(readEnvOrConfig("BIGTOY_HTTPS_ADDR", "httpsaddr", web.BConfig.Listen.HTTPSAddr))
 	if httpsAddr != "" {
 		web.BConfig.Listen.HTTPSAddr = httpsAddr
 	}
 
-	httpsPort := readEnvOrConfigInt("BIGTOY_HTTPS_PORT", "httpsport", web.BConfig.Listen.HTTPSPort)
+	httpsPort := readEnvOrConfigInt("BIGTOY_HTTPS_PORT", "httpsport", defaultHTTPSPort)
 	if httpsPort > 0 {
 		web.BConfig.Listen.HTTPSPort = httpsPort
 	}
