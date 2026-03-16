@@ -932,6 +932,11 @@ body.modal-open {
   gap: 8px;
 }
 
+.recent-list-toolbar {
+  margin-top: 10px;
+  max-width: 340px;
+}
+
 .recent-item {
   border: 1px solid rgba(255, 206, 126, 0.24);
   border-radius: var(--radius-md);
@@ -2753,6 +2758,22 @@ body.modal-open {
 
 .page-admin .recent-main span {
   color: #607087;
+}
+
+.page-admin .sort-order-toggle {
+  border-color: #c8d2e1;
+  background: #eef3fb;
+  color: #2c4262;
+}
+
+.page-admin .sort-order-toggle:hover {
+  border-color: #b8c7dc;
+  background: #e5edf8;
+}
+
+.page-admin .sort-order-toggle:focus-visible {
+  border-color: #5f84b2;
+  box-shadow: 0 0 0 3px rgba(80, 126, 184, 0.18);
 }
 
 .page-admin .btn-inline,

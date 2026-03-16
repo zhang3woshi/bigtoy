@@ -173,6 +173,25 @@
       <p v-if="loadingRecent" class="muted">正在加载车型列表...</p>
       <p v-if="listError" class="state-error">{{ listError }}</p>
 
+      <section class="recent-list-toolbar" aria-label="车型列表排序">
+        <div class="sort-controls">
+          <select v-model="sortField" class="input" aria-label="排序字段">
+            <option value="createdAt">加入时间</option>
+            <option value="modelCode">编号</option>
+          </select>
+          <button
+            type="button"
+            class="sort-order-toggle"
+            :aria-label="sortDirectionAriaLabel"
+            :title="sortDirectionAriaLabel"
+            @click="toggleSortDirection"
+          >
+            <span class="sort-order-icon" aria-hidden="true">{{ sortDirectionIcon }}</span>
+            <span>{{ sortDirectionLabel }}</span>
+          </button>
+        </div>
+      </section>
+
       <div class="recent-list">
         <p v-if="!loadingRecent && !listError && visibleModels.length === 0" class="muted">
           还没有任何车型，先录入一台吧。
@@ -234,7 +253,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { createModel, deleteModel, exportBackup, fetchAuthState, fetchModels, importBackup, logout } from "../js/api.js";
-import { getModelCodeLabel, sortByLatest } from "../utils/model.js";
+import { getModelCodeLabel } from "../utils/model.js";
 
 const pageSize = 10;
 
@@ -247,6 +266,8 @@ const currentPage = ref(1);
 const imageFile = ref(null);
 const galleryFiles = ref([]);
 const backupFile = ref(null);
+const sortField = ref("createdAt");
+const sortDirection = ref("desc");
 
 const loadingRecent = ref(false);
 const listError = ref("");
@@ -266,16 +287,23 @@ const statusClass = computed(() => `form-status-${statusKind.value}`);
 const backupStatusClass = computed(() => `form-status-${backupStatusKind.value}`);
 const backupFileName = computed(() => String(backupFile.value?.name || "").trim());
 
-const totalPages = computed(() => Math.max(1, Math.ceil(currentModels.value.length / pageSize)));
-const showPagination = computed(() => currentModels.value.length > pageSize);
+const sortedModels = computed(() =>
+  sortCollectionModels(currentModels.value, {
+    field: sortField.value,
+    direction: sortDirection.value,
+  }),
+);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedModels.value.length / pageSize)));
+const showPagination = computed(() => sortedModels.value.length > pageSize);
 
 const visibleModels = computed(() => {
   const startIndex = (currentPage.value - 1) * pageSize;
-  return currentModels.value.slice(startIndex, startIndex + pageSize);
+  return sortedModels.value.slice(startIndex, startIndex + pageSize);
 });
 
 const pageStatus = computed(() => {
-  const total = currentModels.value.length;
+  const total = sortedModels.value.length;
   if (total === 0) {
     return "";
   }
@@ -283,6 +311,11 @@ const pageStatus = computed(() => {
   const end = Math.min(currentPage.value * pageSize, total);
   return `第 ${currentPage.value} / ${totalPages.value} 页 · 显示 ${start}-${end} / ${total}`;
 });
+const sortDirectionLabel = computed(() => (sortDirection.value === "desc" ? "降序" : "升序"));
+const sortDirectionIcon = computed(() => (sortDirection.value === "desc" ? "↓" : "↑"));
+const sortDirectionAriaLabel = computed(() =>
+  sortDirection.value === "desc" ? "当前降序，点击切换为升序" : "当前升序，点击切换为降序",
+);
 
 function createInitialForm() {
   return {
@@ -302,6 +335,48 @@ function createInitialForm() {
 
 function modelCodeLabel(value) {
   return getModelCodeLabel(value);
+}
+
+function toSafeTimestamp(value) {
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function compareLocaleValue(left, right, direction = "asc") {
+  const compared = String(left || "").trim().localeCompare(String(right || "").trim(), "zh-CN", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  return direction === "desc" ? -compared : compared;
+}
+
+function sortCollectionModels(items, { field = "createdAt", direction = "desc" } = {}) {
+  const values = [...(items || [])];
+  const normalizedDirection = direction === "asc" ? "asc" : "desc";
+  if (field === "modelCode") {
+    return values.sort((a, b) => {
+      const codeCompared = compareLocaleValue(a?.modelCode, b?.modelCode, normalizedDirection);
+      if (codeCompared !== 0) {
+        return codeCompared;
+      }
+      return compareLocaleValue(a?.id, b?.id, normalizedDirection);
+    });
+  }
+
+  return values.sort((a, b) => {
+    const timeCompared =
+      normalizedDirection === "asc"
+        ? toSafeTimestamp(a?.createdAt) - toSafeTimestamp(b?.createdAt)
+        : toSafeTimestamp(b?.createdAt) - toSafeTimestamp(a?.createdAt);
+    if (timeCompared !== 0) {
+      return timeCompared;
+    }
+    return compareLocaleValue(a?.id, b?.id, normalizedDirection);
+  });
+}
+
+function toggleSortDirection() {
+  sortDirection.value = sortDirection.value === "desc" ? "asc" : "desc";
 }
 
 function setStatus(message, kind = "info") {
@@ -425,7 +500,7 @@ async function refreshRecent() {
 
   try {
     const items = await fetchModels();
-    currentModels.value = sortByLatest(items);
+    currentModels.value = Array.isArray(items) ? items : [];
     if (currentPage.value > totalPages.value) {
       currentPage.value = totalPages.value;
     }
