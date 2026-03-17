@@ -538,3 +538,34 @@ func TestRestoreBackupArchiveRejectsInvalidArchive(t *testing.T) {
 		t.Fatal("expected restore to fail for invalid archive file")
 	}
 }
+
+func TestReplaceDirectoryInPlace(t *testing.T) {
+	root := t.TempDir()
+	sourceDir := filepath.Join(root, "source")
+	targetDir := filepath.Join(root, "target")
+
+	if err := os.MkdirAll(filepath.Join(sourceDir, "new"), 0o755); err != nil {
+		t.Fatalf("create source dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(targetDir, "old"), 0o755); err != nil {
+		t.Fatalf("create target dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(sourceDir, "new", "a.txt"), []byte("new"), 0o644); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "old", "b.txt"), []byte("old"), 0o644); err != nil {
+		t.Fatalf("write target file: %v", err)
+	}
+
+	if err := replaceDirectoryInPlace(sourceDir, targetDir); err != nil {
+		t.Fatalf("replace directory in place: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(targetDir, "new", "a.txt")); err != nil {
+		t.Fatalf("expected new file after in-place replace: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "old", "b.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale file to be removed, got err=%v", err)
+	}
+}

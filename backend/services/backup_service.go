@@ -17,7 +17,12 @@ import (
 const (
 	backupFilePrefix = "backup_"
 	backupFileExt    = ".zip"
+
+	fileOpRetryCount = 12
+	fileOpRetryDelay = 120 * time.Millisecond
 )
+
+var backupFileOperationMu sync.Mutex
 
 type BackupServiceConfig struct {
 	DBPath     string
@@ -130,6 +135,9 @@ func (s *BackupService) CreateBackup() error {
 }
 
 func (s *BackupService) CreateBackupArchive() (string, error) {
+	backupFileOperationMu.Lock()
+	defer backupFileOperationMu.Unlock()
+
 	if err := os.MkdirAll(s.backupDir, 0o755); err != nil {
 		return "", fmt.Errorf("ensure backup directory: %w", err)
 	}
@@ -158,6 +166,9 @@ func (s *BackupService) CreateBackupArchive() (string, error) {
 }
 
 func (s *BackupService) RestoreBackupArchive(archivePath string) error {
+	backupFileOperationMu.Lock()
+	defer backupFileOperationMu.Unlock()
+
 	archivePath = strings.TrimSpace(archivePath)
 	if archivePath == "" {
 		return errors.New("backup archive path is required")
@@ -496,11 +507,18 @@ func replaceDatabaseFile(sourcePath, targetPath string) error {
 		return fmt.Errorf("prepare restored database file: %w", err)
 	}
 
-	if err := os.Remove(targetPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := retryFileOperation(func() error {
+		if err := os.Remove(targetPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}); err != nil {
 		_ = os.Remove(tempPath)
 		return fmt.Errorf("remove existing database file: %w", err)
 	}
-	if err := os.Rename(tempPath, targetPath); err != nil {
+	if err := retryFileOperation(func() error {
+		return os.Rename(tempPath, targetPath)
+	}); err != nil {
 		_ = os.Remove(tempPath)
 		return fmt.Errorf("replace database file: %w", err)
 	}
@@ -517,30 +535,64 @@ func replaceDirectory(sourceDir, targetDir string) error {
 	if err := copyDirectory(sourceDir, stagingDir); err != nil {
 		return fmt.Errorf("prepare restored images directory: %w", err)
 	}
+	defer os.RemoveAll(stagingDir)
 
 	backupDir := filepath.Join(parentDir, fmt.Sprintf(".restore_images_backup_%d", time.Now().UnixNano()))
 	hasOriginal := false
 	if _, err := os.Stat(targetDir); err == nil {
-		if err := os.Rename(targetDir, backupDir); err != nil {
-			_ = os.RemoveAll(stagingDir)
+		if err := retryFileOperation(func() error {
+			return os.Rename(targetDir, backupDir)
+		}); err != nil {
+			if isRetryableFileOpError(err) {
+				if fallbackErr := replaceDirectoryInPlace(stagingDir, targetDir); fallbackErr != nil {
+					return fmt.Errorf("backup existing images directory: %v; in-place restore failed: %w", err, fallbackErr)
+				}
+				return nil
+			}
 			return fmt.Errorf("backup existing images directory: %w", err)
 		}
 		hasOriginal = true
 	} else if !errors.Is(err, os.ErrNotExist) {
-		_ = os.RemoveAll(stagingDir)
 		return fmt.Errorf("read existing images directory info: %w", err)
 	}
 
-	if err := os.Rename(stagingDir, targetDir); err != nil {
+	if err := retryFileOperation(func() error {
+		return os.Rename(stagingDir, targetDir)
+	}); err != nil {
 		if hasOriginal {
-			_ = os.Rename(backupDir, targetDir)
+			_ = retryFileOperation(func() error {
+				return os.Rename(backupDir, targetDir)
+			})
 		}
-		_ = os.RemoveAll(stagingDir)
+		if isRetryableFileOpError(err) {
+			if fallbackErr := replaceDirectoryInPlace(stagingDir, targetDir); fallbackErr != nil {
+				return fmt.Errorf("replace images directory: %v; in-place restore failed: %w", err, fallbackErr)
+			}
+			if hasOriginal {
+				_ = os.RemoveAll(backupDir)
+			}
+			return nil
+		}
 		return fmt.Errorf("replace images directory: %w", err)
 	}
 
 	if hasOriginal {
-		_ = os.RemoveAll(backupDir)
+		_ = retryFileOperation(func() error {
+			return os.RemoveAll(backupDir)
+		})
+	}
+	return nil
+}
+
+func replaceDirectoryInPlace(sourceDir, targetDir string) error {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("ensure target directory: %w", err)
+	}
+	if err := clearDirectoryContents(targetDir); err != nil {
+		return fmt.Errorf("clear target directory: %w", err)
+	}
+	if err := copyDirectoryContents(sourceDir, targetDir); err != nil {
+		return fmt.Errorf("copy restored directory contents: %w", err)
 	}
 	return nil
 }
@@ -588,6 +640,61 @@ func copyDirectory(sourceDir, targetDir string) error {
 	return nil
 }
 
+func clearDirectoryContents(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return os.MkdirAll(dir, 0o755)
+		}
+		return err
+	}
+
+	for _, entry := range entries {
+		target := filepath.Join(dir, entry.Name())
+		if err := retryFileOperation(func() error {
+			return os.RemoveAll(target)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func copyDirectoryContents(sourceDir, targetDir string) error {
+	sourceInfo, err := os.Stat(sourceDir)
+	if err != nil {
+		return fmt.Errorf("read source directory info: %w", err)
+	}
+	if !sourceInfo.IsDir() {
+		return fmt.Errorf("source directory is not a directory: %s", sourceDir)
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("create target directory: %w", err)
+	}
+
+	return filepath.WalkDir(sourceDir, func(currentPath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		relPath, err := filepath.Rel(sourceDir, currentPath)
+		if err != nil {
+			return err
+		}
+		if relPath == "." {
+			return nil
+		}
+
+		targetPath := filepath.Join(targetDir, relPath)
+		if entry.IsDir() {
+			return os.MkdirAll(targetPath, 0o755)
+		}
+
+		return copyFile(currentPath, targetPath)
+	})
+}
+
 func copyFile(sourcePath, targetPath string) error {
 	source, err := os.Open(sourcePath)
 	if err != nil {
@@ -625,4 +732,41 @@ func copyFile(sourcePath, targetPath string) error {
 	}
 
 	return nil
+}
+
+func retryFileOperation(operation func() error) error {
+	var lastErr error
+	for attempt := 0; attempt < fileOpRetryCount; attempt++ {
+		err := operation()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !isRetryableFileOpError(err) {
+			return err
+		}
+		time.Sleep(fileOpRetryDelay * time.Duration(attempt+1))
+	}
+	return lastErr
+}
+
+func isRetryableFileOpError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return true
+	}
+
+	lower := strings.ToLower(err.Error())
+	if strings.Contains(lower, "access is denied") {
+		return true
+	}
+	if strings.Contains(lower, "being used by another process") {
+		return true
+	}
+	if strings.Contains(lower, "permission denied") {
+		return true
+	}
+	return false
 }
