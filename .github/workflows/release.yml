@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,59 +41,60 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Build release packages
+      - name: Prepare release artifacts directory
+        run: mkdir -p release-artifacts
+
+      - name: Package linux amd64
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --skip=before,publish,announce,validate --config goreleaser-linux-amd64.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect linux amd64 artifacts
         shell: bash
-        working-directory: backend
         run: |
           set -euo pipefail
+          cp dist/*.tar.gz release-artifacts/
+          cp dist/SHA256SUMS-linux-amd64.txt release-artifacts/
 
-          VERSION="${GITHUB_REF_NAME}"
-          DIST_DIR="../dist"
-          mkdir -p "${DIST_DIR}"
+      - name: Package linux arm64
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --skip=before,publish,announce,validate --config goreleaser-linux-arm64.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          TARGETS=(
-            "linux amd64"
-            "darwin amd64"
-            "windows amd64"
-          )
+      - name: Collect linux arm64 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp dist/*.tar.gz release-artifacts/
+          cp dist/SHA256SUMS-linux-arm64.txt release-artifacts/
 
-          for target in "${TARGETS[@]}"; do
-            read -r GOOS GOARCH <<<"${target}"
+      - name: Package windows amd64
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean --skip=before,publish,announce,validate --config goreleaser-windows-amd64.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            PACKAGE_DIR="${DIST_DIR}/bigtoy_${VERSION}_${GOOS}_${GOARCH}"
-            BIN_NAME="bigtoy"
-            if [[ "${GOOS}" == "windows" ]]; then
-              BIN_NAME="${BIN_NAME}.exe"
-            fi
-
-            rm -rf "${PACKAGE_DIR}"
-            mkdir -p "${PACKAGE_DIR}"
-
-            GOOS="${GOOS}" GOARCH="${GOARCH}" CGO_ENABLED=0 \
-              go build -trimpath -ldflags="-s -w" -o "${PACKAGE_DIR}/${BIN_NAME}" .
-
-            cp -R conf "${PACKAGE_DIR}/conf"
-            cp -R static "${PACKAGE_DIR}/static"
-            mkdir -p "${PACKAGE_DIR}/data/images" "${PACKAGE_DIR}/data/backup"
-            if [[ -f data/models.json ]]; then
-              cp data/models.json "${PACKAGE_DIR}/data/models.json"
-            fi
-
-            cp ../README.md "${PACKAGE_DIR}/README.md"
-            cp ../LICENSE "${PACKAGE_DIR}/LICENSE"
-
-            tar -C "${DIST_DIR}" -czf "${DIST_DIR}/bigtoy_${VERSION}_${GOOS}_${GOARCH}.tar.gz" "$(basename "${PACKAGE_DIR}")"
-          done
-
-          (
-            cd "${DIST_DIR}"
-            sha256sum ./*.tar.gz > SHA256SUMS.txt
-          )
+      - name: Collect windows amd64 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp dist/*.zip release-artifacts/
+          cp dist/SHA256SUMS-windows-amd64.txt release-artifacts/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            dist/*.tar.gz
-            dist/SHA256SUMS.txt
+            release-artifacts/*

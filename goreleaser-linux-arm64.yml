@@ -46,7 +46,7 @@ archives:
         dst: static/assets
 
 checksum:
-  name_template: SHA256SUMS.txt
+  name_template: SHA256SUMS-linux-arm64.txt
 
 source:
   enabled: false
