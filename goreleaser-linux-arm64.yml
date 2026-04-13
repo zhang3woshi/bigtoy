@@ -1,0 +1,52 @@
+version: 2
+
+project_name: bigtoy
+
+before:
+  hooks:
+    - npm --prefix frontend ci
+    - npm --prefix frontend run build:backend
+
+builds:
+  - id: linux-arm64
+    dir: backend
+    main: .
+    binary: bigtoy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: linux-arm64-bundle
+    ids:
+      - linux-arm64
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    strip_binary_directory: true
+    files:
+      - README.md
+      - LICENSE
+      - src: backend/conf/app.conf
+        dst: conf/app.conf
+      - src: backend/conf/secrets.env.example
+        dst: conf/secrets.env.example
+      - src: backend/static/*.html
+        dst: static
+      - src: backend/static/assets/*
+        dst: static/assets
+
+checksum:
+  name_template: SHA256SUMS.txt
+
+source:
+  enabled: false
