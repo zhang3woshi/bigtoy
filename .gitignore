@@ -12,3 +12,4 @@ backend/$profileFile
 backend/coverage
 backend/coverage_cs
 frontend/coverage/
+backend/static/static.zip

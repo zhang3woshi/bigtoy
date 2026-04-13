@@ -223,7 +223,7 @@
     <footer class="showcase-footer">
       <p class="showcase-footer-brand">zhang3woshi Diecast Collection</p>
       <p>收藏起始 {{ timelineStartYear }} · 当前总数 {{ totalCount }}</p>
-      <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">浙ICP备2022001311号-1</a>
+      <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">沪ICP备2022001311号-1</a>
     </footer>
 
     <div class="detail-modal" :class="{ hidden: !detailVisible }" :aria-hidden="(!detailVisible).toString()">
