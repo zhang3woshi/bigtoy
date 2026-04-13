@@ -223,7 +223,7 @@
     <footer class="showcase-footer">
       <p class="showcase-footer-brand">zhang3woshi Diecast Collection</p>
       <p>收藏起始 {{ timelineStartYear }} · 当前总数 {{ totalCount }}</p>
-      <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">沪ICP备2022001311号-1</a>
+      <a v-if="siteFilingText" :href="siteFilingURL" target="_blank" rel="noopener noreferrer">{{ siteFilingText }}</a>
     </footer>
 
     <div class="detail-modal" :class="{ hidden: !detailVisible }" :aria-hidden="(!detailVisible).toString()">
@@ -243,7 +243,10 @@ import ModelDetailCard from "../components/ModelDetailCard.vue";
 import ModelGridCard from "../components/ModelGridCard.vue";
 import { useRandomShowcase } from "../composables/useRandomShowcase.js";
 import { fetchModels } from "../js/api.js";
+import { getPublicRuntimeConfig } from "../js/runtime-config.js";
 import { filterModels, getBrandList, sortByLatest } from "../utils/model.js";
+
+const publicRuntimeConfig = getPublicRuntimeConfig();
 
 const allModels = ref([]);
 const loading = ref(true);
@@ -255,6 +258,8 @@ const sortDirection = ref("desc");
 
 const detailVisible = ref(false);
 const activeDetailItem = ref(null);
+const siteFilingText = publicRuntimeConfig.siteFilingText;
+const siteFilingURL = publicRuntimeConfig.siteFilingURL;
 
 const DEFAULT_HERO_IMAGE_POSITION = "50% 50%";
 const heroImageObjectPosition = ref(DEFAULT_HERO_IMAGE_POSITION);

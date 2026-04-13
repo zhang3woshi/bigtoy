@@ -49,10 +49,19 @@ func setupPageAuthService(t *testing.T) string {
 }
 
 func TestPageControllerPublicAndDetail(t *testing.T) {
+	t.Setenv("BIGTOY_SITE_FILING_TEXT", "沪ICP备TEST")
+	t.Setenv("BIGTOY_SITE_FILING_URL", "https://example.com/filing")
+
 	controller, _ := newPageControllerForTest(httptest.NewRequest(http.MethodGet, "/", nil))
 	controller.Public()
 	if controller.TplName != "index.html" {
 		t.Fatalf("unexpected public tpl: %s", controller.TplName)
+	}
+	if got := controller.Data["SiteFilingText"]; got != "沪ICP备TEST" {
+		t.Fatalf("unexpected site filing text: %v", got)
+	}
+	if got := controller.Data["SiteFilingURL"]; got != "https://example.com/filing" {
+		t.Fatalf("unexpected site filing url: %v", got)
 	}
 
 	controller.Detail()
@@ -131,4 +140,29 @@ func TestPageControllerAdminAndLoginWithSession(t *testing.T) {
 	if location := loginRecorder.Header().Get("Location"); location != "/admin.html" {
 		t.Fatalf("unexpected login redirect location: %s", location)
 	}
+}
+
+func TestResolveSiteFilingConfig(t *testing.T) {
+	t.Run("empty config hides filing info", func(t *testing.T) {
+		t.Setenv("BIGTOY_SITE_FILING_TEXT", "")
+		t.Setenv("BIGTOY_SITE_FILING_URL", "")
+
+		text, url := resolveSiteFilingConfig()
+		if text != "" || url != "" {
+			t.Fatalf("expected empty filing config, got text=%q url=%q", text, url)
+		}
+	})
+
+	t.Run("default url is applied when only text is configured", func(t *testing.T) {
+		t.Setenv("BIGTOY_SITE_FILING_TEXT", "沪ICP备TEST")
+		t.Setenv("BIGTOY_SITE_FILING_URL", "")
+
+		text, url := resolveSiteFilingConfig()
+		if text != "沪ICP备TEST" {
+			t.Fatalf("unexpected site filing text: %q", text)
+		}
+		if url != defaultSiteFilingURL {
+			t.Fatalf("unexpected default site filing url: %q", url)
+		}
+	})
 }
